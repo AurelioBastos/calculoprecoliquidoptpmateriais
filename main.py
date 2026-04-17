@@ -762,9 +762,12 @@ async def confronto_pc(
                 try: pr = round(_to_num(vpc), 4) if pd.notna(vpc) else 0.0
                 except: pr = 0.0
                 
-                # Regra: RedXML + RedPC deve ser 100
+                # Regra: RedXML + RedPC deve ser 100 ou ambos serem 0
                 soma = round(xr + pr, 2)
-                st_red = 'OK' if soma == 100.0 else 'DIVERGENTE'
+                if xr == 0.0 and pr == 0.0:
+                    st_red = 'OK'
+                else:
+                    st_red = 'OK' if soma == 100.0 else 'DIVERGENTE'
             else:
                 st_red, xr, pr = 'N/A', safe_pct(row.get('% Red BC')), None
 
