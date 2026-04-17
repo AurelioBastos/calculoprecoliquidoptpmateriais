@@ -2467,7 +2467,8 @@ DOM.btnExecutarConfronto.addEventListener('click', async () => {
       const xmlVal = parseFloat(r['pRedBC XML'] ?? r['% Red BC XML'] ?? r['Red BC XML'] ?? NaN);
       const pcVal  = parseFloat(r['Aliq.Red.B.ICMS'] ?? r['Aliq Red B ICMS'] ?? r['Aliq. Red. B. ICMS'] ?? NaN);
       if (isNaN(xmlVal) || isNaN(pcVal)) return false;
-      return Math.round((xmlVal + pcVal) * 100) / 100 !== 100.0;
+      if (Math.abs(xmlVal) < 0.01 && Math.abs(pcVal) < 0.01) return false;
+      return Math.abs(Math.round((xmlVal + pcVal) * 100) / 100 - 100.0) >= 0.1;
     }).length;
     if (DOM.kpiDivRedBc) DOM.kpiDivRedBc.textContent = redBcCount;
     AppState.currentFilter = 'all';
@@ -2529,7 +2530,8 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
         const pcVal  = parseFloat(r['Aliq.Red.B.ICMS'] ?? r['Aliq Red B ICMS'] ?? r['Aliq. Red. B. ICMS'] ?? NaN);
         if (isNaN(xmlVal) || isNaN(pcVal)) return false;
         const soma = Math.round((xmlVal + pcVal) * 100) / 100;
-        return soma !== 100.0;
+        if (Math.abs(xmlVal) < 0.01 && Math.abs(pcVal) < 0.01) return false;
+        return Math.abs(soma - 100.0) >= 0.1;
       }
       return String(r[statusKey] || '').includes('DIVERGENTE');
     });
@@ -2702,7 +2704,8 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
     if (!isNaN(xmlVal) && !isNaN(pcVal)) {
       // Regra: RedXML + RedPC deve ser 100 (arredondado para 2 casas)
       const soma = Math.round((xmlVal + pcVal) * 100) / 100;
-      return soma !== 100.0;
+      if (Math.abs(xmlVal) < 0.01 && Math.abs(pcVal) < 0.01) return false;
+      return Math.abs(soma - 100.0) >= 0.1;
     }
     return false;
   });
@@ -2743,7 +2746,7 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
     const _xmlRedVal = _pRedBcXmlRaw !== null ? parseFloat(_pRedBcXmlRaw) : null;
     const _pcRedVal  = _aliqRedPcRaw !== null ? parseFloat(_aliqRedPcRaw) : null;
     const isDivRedBc = (_xmlRedVal !== null && _pcRedVal !== null)
-      ? Math.round((_xmlRedVal + _pcRedVal) * 100) / 100 !== 100.0
+      ? !(Math.abs(_xmlRedVal) < 0.01 && Math.abs(_pcRedVal) < 0.01) && Math.abs(Math.round((_xmlRedVal + _pcRedVal) * 100) / 100 - 100.0) >= 0.1
       : false;
 
     const rowStyle = isDivRedBc
@@ -2782,7 +2785,8 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
         if (xmlVal !== null && pcVal !== null) {
           // Regra: RedXML + RedPC deve ser 100 (arredondado para 2 casas)
           const soma = Math.round((xmlVal + pcVal) * 100) / 100;
-          const ok = (soma === 100.0);
+          const ambosZero = Math.abs(xmlVal) < 0.01 && Math.abs(pcVal) < 0.01;
+          const ok = ambosZero || Math.abs(soma - 100.0) < 0.1;
           statusHtml = ok ? `<span class="badge ok">OK</span>` : `<span class="badge bad">DIV</span>`;
         }
         return `<td class="r">${xmlVal !== null ? xmlVal + '%' : '-'}</td>
