@@ -648,15 +648,11 @@ async def confronto_pc(
             p_ipi    = _norm_pct(row.get('% IPI',    0))
             p_redbc  = _norm_pct(row.get('% Red BC', 0))
             
-            # PIS individual ou global
+            # PIS individual da linha (sempre priorizado)
             p_pis_raw = row.get('% PIS+COFINS')
-            if p_pis_raw is None:
-                # Se não houver PIS individual, tenta pegar o global enviado no payload (se disponível no contexto da função)
-                # Como a função confronto_pc não recebe o pis_rate_global diretamente, 
-                # vamos assumir 9.25% como fallback se o campo estiver vazio, para bater com a calculadora.
-                p_pis = 0.0925
-            else:
-                p_pis = _norm_pct(p_pis_raw)
+            # Se o campo estiver presente na linha, usamos ele. 
+            # Caso contrário, o fallback é 0.0 (pois o usuário deve configurar na linha se for diferente)
+            p_pis = _norm_pct(p_pis_raw) if p_pis_raw is not None else 0.0
 
             taxa_row = row.get('Taxa Câmbio') or row.get('Taxa Cambio') or row.get('Taxa CÂ¢mbio') or 1
             taxa     = float(taxa_row) if taxa_row else 1.0
