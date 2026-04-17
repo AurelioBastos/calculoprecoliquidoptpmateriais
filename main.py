@@ -714,17 +714,19 @@ async def confronto_pc(
             lim_pct_total = abs(total_calc) * 0.15
             lim_tol       = min(lim_pct_total, 300.0)
             
-            # Validação de dentro/fora (nfe_app.html linha 2895)
+            # Validação de dentro/fora (IGUAL À CALCULADORA UNITÁRIA)
             dentro = abs_dif_total <= (lim_tol + 0.001)
 
-            # Prioridade 1: Arredondamento de centavos no unitário líquido
-            if abs(dif_vl) <= 0.02:
-                st_dif = 'OK'
-            # Prioridade 2: Validação SAP (Total Item)
-            elif dentro:
-                st_dif = 'TOL'
+            # Prioridade: Regra SAP Soberana
+            if not dentro:
+                st_dif = 'DIVERGENTE'
+                div_vl += 1
             else:
-                st_dif = 'DIVERGENTE'; div_vl += 1
+                # Se está dentro da tolerância SAP, verificamos se é um arredondamento de centavos
+                if abs(dif_vl) <= 0.02:
+                    st_dif = 'OK'
+                else:
+                    st_dif = 'TOL'
 
             def cmp(xml_val, col):
                 xp = safe_pct(xml_val)
