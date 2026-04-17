@@ -679,16 +679,33 @@ async def confronto_pc(
                 # PA/Insumo
                 soma_aliq = p_icms_ef + p_pis
 
-            # Gross-up: reconstroi o preco bruto unitario do PC na moeda da nota
+            # ── RECONSTITUIÇÃO DO BRUTO (GROSS-UP) ───────────────────────────────────
+            # Outras despesas unitárias (se houver vOutro no cabeçalho da nota)
+            v_outro_unit = (float(row.get('vOutro') or 0) / qtd_nfe) if qtd_nfe > 0 else 0
+            
+            # Gross-up: reconstrói o preço bruto unitário do PC na moeda da nota
             divisor = (1 - soma_aliq) if soma_aliq < 1.0 else 1.0
             
-            # Preço PC Bruto Unitário (nfe_app.html linha 2884)
-            # precoPcBruto = ((precoPc * taxa) / mult) / divisor
-            pc_bruto_unit = ((vl_pc * taxa) / mult) / divisor
+            if tipo == 'Ativo/Consumo':
+                # No Ativo/Consumo: BC = vUnit_ped * (1 + pIPI) + outras_unit
+                # precoPcBruto = (((precoPc * taxa) / mult) / divisor) / (1 + p_ipi)
+                # E subtraímos as outras despesas antes de dividir pelo IPI
+                pc_bruto_unit = ((((vl_pc * taxa) / mult) / divisor) - v_outro_unit) / (1 + p_ipi)
+            else:
+                # PA/Insumo: BC = vUnit_ped + outras_unit
+                pc_bruto_unit = (((vl_pc * taxa) / mult) / divisor) - v_outro_unit
 
-            # Totais para comparacao (nfe_app.html linhas 2871 e 2886)
-            total_nfe  = vunit * qtd_nfe          # totalNFe = vUnit * qtd
-            total_calc = pc_bruto_unit * qtd_nfe  # totalCalculado = precoPcBruto * qtd (usa qtd da nota)
+            # Totais para comparação (IGUAL À CALCULADORA UNITÁRIA)
+            total_nfe  = vunit * qtd_nfe          # Valor Bruto Real da NF (vProd)
+            
+            # Recalcula o Bruto Total do PC usando a mesma lógica da calculadora
+            v_unit_ped_pc = pc_bruto_unit
+            if tipo == 'Ativo/Consumo':
+                bc_total_pc = (v_unit_ped_pc * (1 + p_ipi)) * qtd_nfe + float(row.get('vOutro') or 0)
+            else:
+                bc_total_pc = v_unit_ped_pc * qtd_nfe + float(row.get('vOutro') or 0)
+            
+            total_calc = bc_total_pc # Valor Bruto que o SAP esperaria para esse PC
 
             dif_total     = total_nfe - total_calc
             abs_dif_total = abs(dif_total)
