@@ -1643,7 +1643,7 @@ function handleFiles(files) {
 /* 
    API
  */
-const API = window.location.origin + '/api';
+const API = '/api';
 
 /* ââ PARSE XML CLIENT-SIDE para extrair nNF e cProd ââ */
 function parseXmlClientSide(xmlText) {
@@ -1763,8 +1763,13 @@ DOM.btnProcessar.addEventListener('click', async () => {
   showLoading();
   try {
     const res = await fetch(`${API}/upload-xml`, { method:'POST', body:fd });
+    if (!res.ok) {
+      const text = await res.text();
+      let msg = 'Erro no servidor';
+      try { const j = JSON.parse(text); msg = j.detail || j.message || msg; } catch(e) { msg = `Erro ${res.status}: ${text.slice(0,100)}`; }
+      throw new Error(msg);
+    }
     const json = await res.json();
-    if(!res.ok) throw new Error(json.detail||json.message||'Erro no processamento');
     AppState.data = json.data;
     console.log("DEBUG - Dados recebidos do XML:", AppState.data[0]);
     AppState.baseLoaded = true;
