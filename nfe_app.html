@@ -1,0 +1,3637 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NF-e · Cálculo de Preço Líquido</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --hk-green-900:#041a12;
+  --hk-green-800:#0b2f1f;
+  --hk-green-700:#0f4d2f;
+  --hk-green-600:#0f6a3c;
+  --hk-green-500:#108647;
+  --hk-green-400:#16a34f;
+  --hk-green-300:#2ccf66;
+  --hk-green-200:#79e39f;
+  --hk-green-100:#c8f5d6;
+
+  --bg:#06150f;
+  --surface:#0a1f16;
+  --surface-2:#102a1d;
+  --surface-3:#143424;
+  --line:#1f4a33;
+  --line-soft:#2a5e42;
+
+  --txt-1:#ecfff2;
+  --txt-2:#b0d7bc;
+  --txt-3:#77a88b;
+
+  --ok:#2ccf66;
+  --warn:#f2b84b;
+  --bad:#f66a6a;
+
+  --radius:12px;
+  --radius-lg:16px;
+  --radius-xl:22px;
+
+  --font:'Manrope',system-ui,sans-serif;
+  --display:'Space Grotesk',system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+
+  --shadow-soft:0 10px 24px rgba(0,0,0,.28);
+  --shadow-strong:0 18px 42px rgba(0,0,0,.38);
+  --glow:0 0 0 3px rgba(44,207,102,.22);
+  --ease:all .22s cubic-bezier(.2,.8,.2,1);
+  --z-modal: 1000;
+}
+
+/* ââ MODAL STYLES ââ */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(4, 26, 18, 0.85);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+.modal-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+.modal-content {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  box-shadow: var(--shadow-strong);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(20px);
+  transition: all 0.3s cubic-bezier(.2,.8,.2,1);
+}
+.modal-overlay.show .modal-content {
+  transform: translateY(0);
+}
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-title {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--hk-green-300);
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--txt-3);
+  font-size: 24px;
+  cursor: pointer;
+  transition: var(--ease);
+}
+.modal-close:hover { color: var(--bad); }
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+html.light .modal-overlay { background: rgba(10, 31, 22, 0.4); }
+html.light .modal-content { background: #fff; box-shadow: 0 20px 50px rgba(0,0,0,0.1); }
+
+/* ââ BCB COTAÃÃES STYLES ââ */
+.bcb-kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:10px;
+  margin-bottom:20px;
+}
+.bcb-kpi{
+  background:var(--surface-2);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:12px 14px;
+  transition:var(--ease);
+}
+.bcb-kpi.highlight{
+  border-color:var(--hk-green-400);
+  box-shadow:0 0 0 2px rgba(44,207,102,.2),var(--shadow-soft);
+}
+.bcb-kpi-label{
+  font-size:9px;font-weight:800;
+  color:var(--txt-3);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  font-family:var(--mono);
+  margin-bottom:5px;
+}
+.bcb-kpi-val{
+  font-size:20px;font-weight:700;
+  color:var(--ok);
+  font-family:var(--mono);
+}
+.bcb-kpi-sub{
+  font-size:10px;color:var(--txt-3);
+  font-family:var(--mono);
+  margin-top:3px;
+}
+.bcb-row-sel{
+  cursor:pointer;
+}
+.bcb-row-sel:hover td{
+  background:rgba(44,207,102,.08)!important;
+}
+.bcb-row-sel.selected td{
+  background:rgba(44,207,102,.14)!important;
+}
+html.light .bcb-kpi{background:#fff;border-color:var(--line)}
+html.light .bcb-kpi.highlight{border-color:var(--hk-green-500)}
+
+/* ââ SMOOTH THEME TRANSITION ââ */
+body, .topbar, .sidebar, .sidebar-section, .main, .kpi, .tab,
+.panel-head, .procv-config, .conf-head, .conf-kpis, .procv-kpis,
+.ped-toggle, .conf-filter, .pkpi, .ckpi, .filter-btn,
+table.dt th, table.dt td, .field input, .field select,
+.ie, .dropzone, .btn, .dz-inline, .sel-group select, .tol-group input{
+  transition: background .25s ease, background-color .25s ease,
+              border-color .25s ease, color .25s ease, box-shadow .25s ease;
+}
+
+html.light{
+  --bg:#f8faf9;
+  --surface:#ffffff;
+  --surface-2:#f0f4f2;
+  --surface-3:#e6ede9;
+  --line:#e0e8e5;
+  --line-soft:#c8d8d2;
+
+  --txt-1:#0a1f16;
+  --txt-2:#2a5e42;
+  --txt-3:#5a7d6a;
+
+  --ok:#18a34a;
+  --warn:#d4900a;
+  --bad:#d9363e;
+
+  --shadow-soft:0 4px 18px rgba(10,31,22,.10);
+  --shadow-strong:0 8px 32px rgba(10,31,22,.13);
+  --glow:0 0 0 3px rgba(16,134,71,.18);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:var(--font);
+  color:var(--txt-1);
+  background:
+    radial-gradient(1200px 480px at -10% -20%, rgba(22,163,79,.32), transparent 60%),
+    radial-gradient(1000px 420px at 110% 0%, rgba(44,207,102,.22), transparent 60%),
+    linear-gradient(140deg, #04110b 0%, #06150f 38%, #081e14 100%);
+  display:flex;
+  flex-direction:column;
+  line-height:1.45;
+  transition:background .3s ease, color .3s ease;
+}
+html.light body{
+  background:
+    radial-gradient(1200px 480px at -10% -20%, rgba(22,163,79,.08), transparent 60%),
+    radial-gradient(1000px 420px at 110% 0%, rgba(16,134,71,.06), transparent 60%),
+    linear-gradient(140deg, #f2f7f4 0%, #f8faf9 38%, #f4f8f6 100%);
+}
+
+/* ââ LIGHT: TOPBAR ââ */
+html.light .topbar{
+  background:linear-gradient(180deg,rgba(255,255,255,.97),rgba(248,250,249,.92));
+  border-bottom:1px solid var(--line);
+}
+html.light .topbar::after{
+  background:linear-gradient(90deg, transparent, var(--hk-green-500), transparent);
+  opacity:.5;
+}
+html.light .topbar-pill{
+  border-color:rgba(16,134,71,.3);
+  background:rgba(16,134,71,.08);
+  color:var(--hk-green-600);
+}
+html.light .brand-name{color:var(--txt-1)}
+html.light .brand-name span{color:var(--hk-green-500)}
+
+/* ââ LIGHT: SIDEBAR ââ */
+html.light .sidebar{
+  background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,249,.94));
+  border-color:var(--line);
+}
+html.light .sidebar-section{border-color:var(--line)}
+html.light .section-label{color:var(--hk-green-600)}
+html.light .section-label::after{background:var(--line)}
+html.light .field label{color:var(--txt-2)}
+html.light .field input,html.light .field select{
+  background-color:#fff;
+  background:#fff;
+  border-color:var(--line-soft);
+  color:var(--txt-1);
+}
+html.light .field input:focus,html.light .field select:focus{
+  border-color:var(--hk-green-500);
+  box-shadow:var(--glow);
+}
+html.light .field select{
+  background-color:#fff;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 6 5-6' stroke='%230f6a3c' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 11px center;
+}
+html.light .field select option{
+  background:#fff;
+  color:#0a1f16;
+}
+html.light .sel-group select option,
+html.light .tol-group select option{
+  background:#fff;
+  color:#0a1f16;
+}
+html.light .field small{color:var(--txt-3)}
+html.light .dropzone{
+  border-color:rgba(16,134,71,.35);
+  background:linear-gradient(180deg,rgba(240,244,242,.9),rgba(240,244,242,.6));
+}
+html.light .dropzone:hover,html.light .dropzone.over{
+  border-color:var(--hk-green-500);
+  box-shadow:0 0 0 1px rgba(16,134,71,.18),0 6px 18px rgba(10,31,22,.08);
+}
+html.light .dropzone.has-files{background:linear-gradient(180deg,rgba(200,245,214,.4),rgba(200,245,214,.2));border-color:var(--hk-green-500)}
+html.light .dropzone p{color:var(--txt-2)}
+html.light .dropzone p b{color:var(--txt-1)}
+
+/* ââ LIGHT: BUTTONS ââ */
+html.light .btn-secondary,html.light .btn-ghost{
+  color:var(--txt-2);
+  background:rgba(240,244,242,.85);
+  border-color:var(--line-soft);
+}
+html.light .btn-secondary:hover:not(:disabled),html.light .btn-ghost:hover:not(:disabled){
+  color:var(--txt-1);border-color:var(--hk-green-500);
+}
+html.light .btn-success{
+  color:var(--hk-green-700);
+  background:rgba(16,134,71,.12);
+  border-color:rgba(16,134,71,.3);
+}
+html.light .btn-danger{background:rgba(246,106,106,.1);border-color:rgba(246,106,106,.28);color:#b91c1c}
+
+/* ââ LIGHT: MAIN PANEL ââ */
+html.light .main{
+  background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,249,.94));
+  border-color:var(--line);
+}
+
+/* ââ LIGHT: KPI CARDS ââ */
+html.light .kpi{
+  background:linear-gradient(180deg,#fff,#f8faf9);
+  border-color:var(--line);
+  box-shadow:0 2px 8px rgba(10,31,22,.07);
+}
+html.light .kpi::after{
+  background:radial-gradient(circle,rgba(16,134,71,.08),transparent 70%);
+}
+html.light .kpi.y{border-color:rgba(212,144,10,.3)}
+html.light .kpi.p{border-color:rgba(16,134,71,.3)}
+html.light .kpi-label{color:var(--txt-2)}
+html.light .kpi-val{color:var(--txt-1)}
+html.light .kpi-bar-row2{border-color:var(--line)}
+html.light .kpi-bar{border-bottom:none}
+
+/* ââ LIGHT: TABBAR ââ */
+html.light .tabbar{border-color:var(--line)}
+html.light .tab{color:var(--txt-3)}
+html.light .tab:hover{color:var(--txt-1);border-color:var(--line-soft)}
+html.light .tab.active{
+  color:var(--hk-green-700);
+  border-color:rgba(16,134,71,.35);
+  background:linear-gradient(180deg,rgba(200,245,214,.45),rgba(200,245,214,.2));
+}
+
+/* ââ LIGHT: PANEL HEAD ââ */
+html.light .panel-head,html.light .procv-config,html.light .conf-head,
+html.light .conf-kpis,html.light .procv-kpis,html.light .ped-toggle,html.light .conf-filter{
+  background:rgba(240,244,242,.75);
+  border-color:var(--line);
+}
+html.light .panel-hint{color:var(--txt-3)}
+
+/* ââ LIGHT: TABLE ââ */
+html.light table.dt th{
+  background:rgba(240,244,242,.98);
+  border-color:var(--line);
+  color:var(--txt-2);
+}
+html.light table.dt td{
+  border-color:rgba(224,232,229,.7);
+  color:var(--txt-1);
+}
+html.light table.dt tbody tr:hover{background:rgba(16,134,71,.05)}
+html.light table.dt .money{color:var(--hk-green-600)}
+
+/* ââ LIGHT: INPUTS IN TABLE ââ */
+html.light .ie{
+  background:#fff;
+  border-color:var(--line-soft);
+  color:var(--txt-1);
+}
+html.light .ie:focus{box-shadow:var(--glow);border-color:var(--hk-green-500)}
+
+/* ââ LIGHT: PROCV / CONF ELEMENTS ââ */
+html.light .procv-config .dz-inline,html.light .conf-head .dz-inline{
+  background:rgba(240,244,242,.8);
+  border-color:rgba(16,134,71,.28);
+}
+html.light .procv-config .dz-inline:hover,html.light .conf-head .dz-inline:hover,
+html.light .procv-config .dz-inline.over,html.light .conf-head .dz-inline.over{
+  border-color:var(--hk-green-500);background:rgba(200,245,214,.3);
+}
+html.light .procv-config .dz-inline p,html.light .conf-head .dz-inline p{color:var(--txt-2)}
+html.light .procv-config .dz-inline p b,html.light .conf-head .dz-inline p b{color:var(--txt-1)}
+html.light .sel-group label,html.light .tol-group label{color:var(--txt-3)}
+html.light .sel-group select,html.light .tol-group input{
+  background-color:#fff;background:#fff;border-color:var(--line-soft);color:var(--txt-1);
+}
+html.light .sel-group select:focus,html.light .tol-group input:focus{
+  box-shadow:var(--glow);border-color:var(--hk-green-500);
+}
+
+/* ââ LIGHT: MINI KPIs ââ */
+html.light .pkpi,html.light .ckpi{
+  background:linear-gradient(180deg,#fff,#f8faf9);
+  border-color:var(--line);
+}
+html.light .pkpi-label,html.light .ckpi-label{color:var(--txt-3)}
+html.light .pkpi.ok .pkpi-val,html.light .ckpi.ok .ckpi-val{color:var(--ok)}
+html.light .pkpi.nok .pkpi-val,html.light .ckpi.bad .ckpi-val{color:var(--bad)}
+html.light .ckpi.warn .ckpi-val{color:var(--warn)}
+
+/* ââ LIGHT: PED TOGGLE ââ */
+html.light .ped-toggle summary{color:var(--hk-green-600)}
+
+/* ââ LIGHT: FILTER BUTTONS ââ */
+html.light .filter-btn{
+  border-color:var(--line-soft);color:var(--txt-2);
+}
+html.light .filter-btn:hover:not(.active){color:var(--txt-1);background:rgba(16,134,71,.08)}
+html.light .filter-btn.active{color:#fff;background:linear-gradient(160deg,var(--hk-green-500),var(--hk-green-600));border-color:transparent}
+
+/* ââ LIGHT: BADGES ââ */
+html.light .badge.ok{background:rgba(16,134,71,.15);color:var(--hk-green-700)}
+html.light .badge.warn{background:rgba(212,144,10,.15);color:#92620a}
+html.light .badge.bad{background:rgba(217,54,62,.12);color:#b91c1c}
+html.light .badge.nm{background:rgba(90,125,106,.12);color:var(--txt-2)}
+
+/* ââ LIGHT: SCROLLBAR ââ */
+html.light ::-webkit-scrollbar-thumb{background:rgba(16,134,71,.18)}
+html.light ::-webkit-scrollbar-thumb:hover{background:rgba(16,134,71,.32)}
+
+/* ââ LIGHT: OVERLAY ââ */
+html.light #overlay{background:rgba(240,244,242,.82)}
+html.light .spin{border-color:rgba(16,134,71,.15);border-top-color:var(--hk-green-500)}
+html.light .spin-txt{color:var(--txt-2)}
+
+/* ââ LIGHT: UTILITY ââ */
+html.light .green{color:var(--hk-green-600)!important}
+html.light .yellow{color:var(--warn)!important}
+html.light .red{color:#b91c1c!important}
+html.light .muted{color:var(--txt-3)!important}
+html.light .th-green{color:var(--hk-green-600)!important}
+
+/* ââ THEME TOGGLE BUTTON ââ */
+.theme-toggle{
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid rgba(121,227,159,.34);
+  background:rgba(16,42,29,.35);
+  color:var(--hk-green-100);
+  border-radius:999px;
+  padding:6px 13px;
+  font-size:11px;
+  font-family:var(--mono);
+  font-weight:700;
+  letter-spacing:.05em;
+  cursor:pointer;
+  transition:var(--ease);
+  white-space:nowrap;
+}
+.theme-toggle:hover{
+  background:rgba(16,42,29,.55);
+  border-color:rgba(121,227,159,.55);
+}
+.theme-toggle .t-icon{font-size:14px;line-height:1}
+html.light .theme-toggle{
+  border-color:rgba(16,134,71,.3);
+  background:rgba(240,244,242,.8);
+  color:var(--hk-green-700);
+}
+html.light .theme-toggle:hover{
+  background:rgba(200,245,214,.5);
+  border-color:rgba(16,134,71,.5);
+}
+
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(121,227,159,.25);border-radius:14px}
+::-webkit-scrollbar-thumb:hover{background:rgba(121,227,159,.42)}
+
+.topbar{
+  min-height:66px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:0 26px;
+  background:linear-gradient(180deg, rgba(10,31,22,.95), rgba(10,31,22,.82));
+  border-bottom:1px solid var(--line);
+  backdrop-filter:blur(8px);
+  position:relative;
+  z-index:50;
+}
+.topbar::after{
+  content:'';
+  position:absolute;
+  left:0;right:0;bottom:-1px;
+  height:2px;
+  background:linear-gradient(90deg, transparent, var(--hk-green-300), transparent);
+  opacity:.75;
+}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-icon{
+  width:38px;height:38px;
+  border-radius:11px;
+  display:grid;place-items:center;
+  font-size:17px;
+  background:linear-gradient(145deg, var(--hk-green-700), var(--hk-green-400));
+  box-shadow:0 8px 18px rgba(16,134,71,.35);
+}
+.brand-name{
+  font-family:var(--display);
+  letter-spacing:.02em;
+  font-size:16px;
+  font-weight:700;
+}
+.brand-name span{color:var(--hk-green-200)}
+.topbar-pill{
+  border:1px solid rgba(121,227,159,.34);
+  background:rgba(16,134,71,.19);
+  color:var(--hk-green-100);
+  border-radius:999px;
+  padding:6px 12px;
+  font-size:11px;
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.workspace{
+  display:grid;
+  grid-template-columns:300px minmax(0,1fr);
+  gap:16px;
+  padding:16px;
+  flex:1;
+  min-height:0;
+}
+
+.sidebar{
+  min-width:0;
+  background:linear-gradient(180deg, rgba(10,31,22,.92), rgba(10,31,22,.78));
+  border:1px solid var(--line);
+  border-radius:var(--radius-xl);
+  overflow:auto;
+  box-shadow:var(--shadow-soft);
+}
+.sidebar-section{padding:20px 18px;border-bottom:1px solid rgba(121,227,159,.12)}
+.sidebar-section:last-child{border-bottom:none}
+.section-label{
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;
+  font-weight:800;
+  color:var(--hk-green-200);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  margin-bottom:14px;
+  font-family:var(--mono);
+}
+.section-label::after{content:'';height:1px;flex:1;background:rgba(121,227,159,.2)}
+
+.field{margin-bottom:12px}
+.field:last-child{margin-bottom:0}
+.field label{
+  display:block;
+  margin-bottom:6px;
+  font-size:12px;
+  color:var(--txt-2);
+  font-weight:600;
+}
+.field input,.field select{
+  width:100%;
+  border-radius:11px;
+  border:1px solid var(--line-soft);
+  background:rgba(16,42,29,.88);
+  color:var(--txt-1);
+  padding:10px 12px;
+  font-family:var(--mono);
+  font-size:12px;
+  outline:none;
+  transition:var(--ease);
+  -webkit-appearance:none;appearance:none;
+}
+.field select{
+  cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 6 5-6' stroke='%23c8f5d6' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 11px center;
+  padding-right:30px;
+}
+.field input:focus,.field select:focus{border-color:var(--hk-green-300);box-shadow:var(--glow)}
+.field small{display:block;margin-top:6px;color:var(--txt-3);font-size:10px;font-family:var(--mono)}
+
+.dropzone{
+  border:1.5px dashed rgba(121,227,159,.4);
+  border-radius:14px;
+  padding:22px 14px;
+  text-align:center;
+  cursor:pointer;
+  background:linear-gradient(180deg, rgba(16,42,29,.75), rgba(16,42,29,.45));
+  transition:var(--ease);
+  margin-bottom:12px;
+}
+.dropzone:hover,.dropzone.over{
+  border-color:var(--hk-green-200);
+  transform:translateY(-1px);
+  box-shadow:0 0 0 1px rgba(121,227,159,.28), 0 10px 24px rgba(6,26,18,.35);
+}
+.dropzone.has-files{background:linear-gradient(180deg, rgba(16,104,58,.3), rgba(16,134,71,.2));border-color:var(--hk-green-300)}
+.dropzone .dz-icon{font-size:26px;margin-bottom:6px}
+.dropzone p{font-size:12px;color:var(--txt-2)}
+.dropzone p b{color:var(--txt-1)}
+
+.btn{
+  width:100%;
+  display:inline-flex;
+  justify-content:center;
+  align-items:center;
+  gap:7px;
+  border-radius:11px;
+  border:1px solid transparent;
+  padding:10px 14px;
+  font-weight:700;
+  font-size:12px;
+  transition:var(--ease);
+  cursor:pointer;
+  font-family:var(--font);
+}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+.btn-primary{
+  color:#03160d;
+  background:linear-gradient(160deg, var(--hk-green-300), var(--hk-green-200));
+  border-color:rgba(200,245,214,.4);
+}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 24px rgba(44,207,102,.28)}
+.btn-secondary,.btn-ghost{
+  color:var(--txt-2);
+  background:rgba(16,42,29,.5);
+  border-color:rgba(121,227,159,.25);
+}
+.btn-secondary:hover:not(:disabled),.btn-ghost:hover:not(:disabled){color:var(--txt-1);border-color:var(--hk-green-300)}
+.btn-success{
+  color:var(--hk-green-100);
+  background:rgba(16,134,71,.24);
+  border-color:rgba(121,227,159,.38);
+}
+.btn-success:hover:not(:disabled){background:rgba(16,134,71,.35)}
+.btn-danger{background:rgba(246,106,106,.14);border-color:rgba(246,106,106,.33);color:#ffb8b8}
+.btn-sm{width:auto;padding:8px 12px;font-size:11px}
+.btn-icon{width:34px;height:34px;padding:0}
+
+.main{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:var(--radius-xl);
+  background:linear-gradient(180deg, rgba(10,31,22,.92), rgba(10,31,22,.76));
+  box-shadow:var(--shadow-strong);
+}
+
+    .kpi-bar{
+	  display:flex;
+	  flex-wrap:nowrap;
+	  gap:8px;
+	  padding:12px 16px;
+	  border-bottom:1px solid rgba(121,227,159,.16);
+	  overflow-x:auto;
+	}
+	.kpi-bar .kpi{
+	  flex:1;
+	  min-width:110px;
+	}
+	.kpi-bar .kpi-val{font-size:14px}
+	.kpi-bar .kpi-label{font-size:9px}
+.kpi{
+  position:relative;
+  padding:14px;
+  border-radius:14px;
+  border:1px solid rgba(121,227,159,.24);
+  background:linear-gradient(180deg, rgba(16,42,29,.7), rgba(16,42,29,.45));
+  overflow:hidden;
+}
+.kpi::after{
+  content:'';
+  position:absolute;
+  inset:-45% auto auto -20%;
+  width:120px;height:120px;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(121,227,159,.22), transparent 70%);
+}
+.kpi-label{font-size:10px;color:var(--txt-2);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:5px;font-family:var(--mono)}
+.kpi-val{font-family:var(--display);font-size:20px;font-weight:700}
+.kpi.y{border-color:rgba(242,184,75,.35)}
+.kpi.p{border-color:rgba(121,227,159,.35)}
+.kpi.r{border-color:rgba(246,106,106,.35)}
+
+.content-area{display:flex;flex-direction:column;min-height:0;flex:1}
+.tabbar{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px;
+  border-bottom:1px solid rgba(121,227,159,.15);
+  overflow:auto;
+}
+.tabbar::-webkit-scrollbar{height:0}
+.tab{
+  border:1px solid transparent;
+  background:transparent;
+  color:var(--txt-3);
+  padding:9px 13px;
+  border-radius:11px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+  transition:var(--ease);
+}
+.tab:hover{color:var(--txt-1);border-color:rgba(121,227,159,.2)}
+.tab.active{
+  color:var(--hk-green-100);
+  border-color:rgba(121,227,159,.5);
+  background:linear-gradient(180deg, rgba(16,104,58,.42), rgba(16,104,58,.2));
+}
+.tab-spacer{flex:1}
+.tab-action{display:flex;align-items:center}
+
+.panels{position:relative;flex:1;min-height:0}
+.panel{display:none;height:100%;flex-direction:column;min-height:0}
+.panel.active{display:flex;animation:panelIn .25s ease}
+@keyframes panelIn{from{opacity:.15;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+
+.panel-head,.procv-config,.conf-head,.conf-kpis,.procv-kpis,.ped-toggle,.conf-filter{
+  background:rgba(10,31,22,.66);
+  border-bottom:1px solid rgba(121,227,159,.12);
+}
+.panel-head{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.panel-hint{font-size:11px;color:var(--txt-3);font-family:var(--mono)}
+
+.table-wrap{flex:1;overflow:auto;min-height:0}
+.empty{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;color:var(--txt-3)}
+.empty-icon{font-size:40px;opacity:.5}
+.empty p{font-family:var(--mono);font-size:12px}
+
+table.dt{width:100%;border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:12px}
+table.dt th{
+  position:sticky;top:0;z-index:2;
+  background:rgba(16,42,29,.95);
+  border-bottom:1px solid rgba(121,227,159,.28);
+  color:var(--txt-2);
+  text-align:left;
+  padding:10px 12px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  font-size:10px;
+}
+table.dt td{padding:9px 12px;border-bottom:1px solid rgba(121,227,159,.1);white-space:nowrap}
+table.dt tbody tr{transition:background .14s ease}
+table.dt tbody tr:hover{background:rgba(44,207,102,.08)}
+table.dt .r{text-align:right}
+table.dt .money{color:var(--hk-green-200);font-weight:700}
+
+.ie{
+  width:74px;
+  border-radius:8px;
+  border:1px solid rgba(121,227,159,.35);
+  background:rgba(16,42,29,.8);
+  color:var(--hk-green-100);
+  padding:4px 6px;
+  outline:none;
+  font-family:var(--mono);
+  font-size:11px;
+  text-align:center;
+}
+.ie:focus{box-shadow:var(--glow);border-color:var(--hk-green-200)}
+select.ie{width:118px;cursor:pointer;padding-right:20px}
+.th-green{color:var(--hk-green-200)!important}
+
+.procv-config,.conf-head{
+  padding:12px 16px;
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.procv-config .dz-inline,.conf-head .dz-inline{
+  border:1.5px dashed rgba(121,227,159,.35);
+  border-radius:11px;
+  padding:9px 14px;
+  background:rgba(16,42,29,.6);
+  display:flex;align-items:center;gap:8px;
+  cursor:pointer;
+  transition:var(--ease);
+}
+.procv-config .dz-inline:hover,.procv-config .dz-inline.over,
+.conf-head .dz-inline:hover,.conf-head .dz-inline.over{border-color:var(--hk-green-200);background:rgba(16,104,58,.25)}
+.procv-config .dz-inline p,.conf-head .dz-inline p{font-size:11px;color:var(--txt-2)}
+.procv-config .dz-inline p b,.conf-head .dz-inline p b{color:var(--txt-1)}
+
+.sel-group,.tol-group{display:flex;flex-direction:column;gap:4px}
+.sel-group label,.tol-group label{font-size:10px;color:var(--txt-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.sel-group select,.tol-group input{
+  border-radius:9px;
+  border:1px solid rgba(121,227,159,.28);
+  background:rgba(16,42,29,.78);
+  color:var(--txt-1);
+  font-size:11px;
+  font-family:var(--mono);
+  padding:7px 10px;
+  outline:none;
+}
+.tol-group input{width:96px}
+.sel-group select:focus,.tol-group input:focus{box-shadow:var(--glow);border-color:var(--hk-green-200)}
+
+.procv-kpis,.conf-kpis{display:none;gap:10px;padding:10px 16px;flex-wrap:wrap}
+.procv-kpis.show,.conf-kpis.show{display:flex}
+.pkpi,.ckpi{
+  background:linear-gradient(180deg, rgba(16,42,29,.8), rgba(16,42,29,.5));
+  border:1px solid rgba(121,227,159,.22);
+  border-radius:12px;
+  padding:10px 12px;
+}
+.pkpi-label,.ckpi-label{font-size:10px;color:var(--txt-3);text-transform:uppercase;font-weight:800;letter-spacing:.06em}
+.pkpi-val,.ckpi-val{font-family:var(--display);font-weight:700;font-size:20px}
+.ckpi-val{font-size:16px}
+.pkpi.ok .pkpi-val,.ckpi.ok .ckpi-val{color:var(--ok)}
+.pkpi.nok .pkpi-val,.ckpi.bad .ckpi-val{color:var(--bad)}
+.ckpi.warn .ckpi-val{color:var(--warn)}
+.ckpi{flex:1;min-width:90px}
+
+.ped-toggle{padding:10px 16px}
+.ped-toggle summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--hk-green-200);font-family:var(--mono);font-size:11px}
+.ped-toggle summary::-webkit-details-marker,.ped-toggle summary::marker{display:none}
+.ped-toggle summary .arrow{font-style:normal;transition:transform .2s ease}
+.ped-toggle[open] summary .arrow{transform:rotate(90deg)}
+.ped-inner{padding:10px 0 4px}
+.ped-hint{font-size:10px;color:var(--txt-3);font-family:var(--mono);margin-bottom:8px}
+.ped-table-wrap{max-height:180px;overflow:auto}
+
+.conf-filter{display:flex;align-items:center;gap:6px;padding:10px 16px}
+.filter-btn{
+  border-radius:999px;
+  border:1px solid rgba(121,227,159,.34);
+  background:transparent;
+  color:var(--txt-2);
+  padding:5px 12px;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+  transition:var(--ease);
+}
+.filter-btn:hover:not(.active){color:var(--txt-1);background:rgba(16,104,58,.16)}
+.filter-btn.active{color:#04150e;background:linear-gradient(160deg, var(--hk-green-300), var(--hk-green-200));border-color:rgba(200,245,214,.45)}
+
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;font-family:var(--mono);font-size:10px;font-weight:700}
+.badge.ok{background:rgba(44,207,102,.2);color:var(--hk-green-100)}
+.badge.warn{background:rgba(242,184,75,.2);color:#ffdd95}
+.badge.bad{background:rgba(246,106,106,.2);color:#ffc7c7}
+.badge.nm{background:rgba(119,168,139,.2);color:#bdd9c8}
+
+#overlay{
+  position:fixed;inset:0;
+  background:rgba(4,12,8,.76);
+  backdrop-filter:blur(6px);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  gap:12px;
+  z-index:999;
+}
+#overlay.show{display:flex}
+.spin{
+  width:46px;height:46px;border-radius:50%;
+  border:3px solid rgba(121,227,159,.2);
+  border-top-color:var(--hk-green-200);
+  animation:spin .8s linear infinite;
+}
+.spin-txt{font-size:11px;color:var(--txt-2);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.th-highlight-liq{
+  color:#fff !important;
+  background:linear-gradient(180deg, rgba(44,207,102,.35), rgba(44,207,102,.2)) !important;
+  border-bottom:2px solid var(--hk-green-300) !important;
+  letter-spacing:.06em;
+}
+.td-highlight-liq{
+  color:var(--hk-green-200) !important;
+  font-weight:700;
+  background:rgba(44,207,102,.07);
+  border-left:2px solid rgba(44,207,102,.3);
+}
+html.light .th-highlight-liq{
+  color:var(--hk-green-800) !important;
+  background:linear-gradient(180deg, rgba(16,134,71,.18), rgba(16,134,71,.08)) !important;
+  border-bottom:2px solid var(--hk-green-500) !important;
+}
+html.light .td-highlight-liq{
+  color:var(--hk-green-700) !important;
+  background:rgba(16,134,71,.06);
+  border-left:2px solid rgba(16,134,71,.25);
+}
+.yellow{color:var(--warn)!important}
+.red{color:#ffc7c7!important}
+.muted{color:var(--txt-3)!important}
+.row{display:flex;align-items:center;gap:8px}
+.spacer{flex:1}
+.xml-history{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.xml-history-list{list-style:none;max-height:120px;overflow-y:auto;margin-top:8px}
+.xml-history-item{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--txt-3);font-family:var(--mono);padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;transition:var(--ease);border-radius:6px}
+.xml-history-item:hover{background:rgba(44,207,102,0.1);color:var(--txt-1)}
+.xml-history-item span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xml-history-item .status-dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.btn-outline-danger{background:transparent;border:1px solid rgba(246,106,106,0.3);color:var(--bad);margin-top:8px}
+.btn-outline-danger:hover:not(:disabled){background:rgba(246,106,106,0.1);border-color:var(--bad)}
+.persistent-history{margin-top:20px;border-top:2px solid var(--line);padding-top:16px}
+.ph-list{list-style:none;margin-top:10px}
+.ph-item{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer;transition:var(--ease);display:flex;flex-direction:column;gap:2px}
+.ph-item:hover{border-color:var(--hk-green-300);background:rgba(44,207,102,0.05)}
+.ph-nf{font-size:11px;font-weight:800;color:var(--ok);font-family:var(--mono)}
+.ph-chave{font-size:9px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono)}
+.ph-date{font-size:8px;color:var(--txt-3);text-align:right;margin-top:4px;opacity:0.6}
+
+@media (max-width:1180px){
+  .workspace{grid-template-columns:1fr;gap:12px;padding:12px;overflow:auto}
+  .sidebar{max-height:42vh}
+  .kpi-bar{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi-bar-row2{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+
+@media (max-width:760px){
+  html,body{overflow:auto}
+  .topbar{padding:0 14px;min-height:60px}
+  .topbar-pill{display:none}
+  .workspace{padding:10px}
+  .sidebar-section{padding:14px}
+  .main{border-radius:14px}
+  .kpi-bar{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px 12px 0}
+  .kpi-bar-row2{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 12px 12px}
+  .tabbar{padding:8px 10px}
+  .tab{padding:8px 10px;font-size:11px}
+  .panel-head,.procv-config,.conf-head,.conf-kpis,.procv-kpis,.ped-toggle,.conf-filter{padding-left:10px;padding-right:10px}
+  table.dt th,table.dt td{padding:8px 9px}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-icon">NF</div>
+    <span class="brand-name">NF-e <span>Preco Liquido</span></span>
+  </div>
+  <span class="topbar-pill">CSC - Fiscal Analytics</span>
+  <button class="theme-toggle" id="btn-theme" title="Alternar tema">
+    <span class="t-icon" id="theme-icon">☀️</span>
+    <span id="theme-label">Light</span>
+  </button>
+</header>
+
+<!-- WORKSPACE -->
+<div class="workspace">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="section-label">PARAMETROS</div>
+
+      <div class="field">
+        <label for="sel-tipo">Tipo de Material</label>
+        <select id="sel-tipo">
+          <option value="Ativo/Consumo">Ativo / Consumo</option>
+          <option value="PA/Insumo">PA / Insumo</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="inp-pis">Aliquota PIS + COFINS (%)</label>
+        <input type="number" id="inp-pis" value="9.25" step="0.01">
+      </div>
+
+      <div class="field">
+        <label for="inp-taxa">Taxa de Cambio (Efetiva)</label>
+        <input type="number" id="inp-taxa" value="1.0" step="0.0001">
+        <small>BRL -> 1.0 &nbsp;|&nbsp; Divisor -> 1/taxa</small>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">IMPORTAR XMLS</div>
+
+      <div class="dropzone" id="drop-zone-xml">
+        <div class="dz-icon">XML</div>
+        <p>Arraste arquivos <b>XML NF-e</b><br>ou clique para selecionar</p>
+        <input type="file" id="upload-xml" multiple accept=".xml" hidden>
+      </div>
+
+      <button id="btn-processar" class="btn btn-primary" disabled>
+        Processar XMLs
+      </button>
+      <button id="btn-limpar-dados" class="btn btn-outline-danger btn-sm" style="display:none">
+        Limpar Tudo
+      </button>
+
+      <div id="xml-history-section" class="xml-history" style="display:none">
+        <div class="section-label" style="font-size:9px;opacity:0.7">Arquivos da Sessão</div>
+        <div id="xml-history-list" class="xml-history-list">
+          <!-- itens inseridos via JS -->
+        </div>
+      </div>
+
+      <div class="persistent-history">
+        <div class="section-label">ÚLTIMAS 10 CONSULTAS</div>
+        <div id="ph-list" class="ph-list">
+          <!-- itens persistentes -->
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- KPI BAR -->
+    <div class="kpi-bar">
+      <div class="kpi">
+        <div class="kpi-label">ITEMS</div>
+        <div class="kpi-val" id="kpi-itens">-</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">VL TOTAL PRODUTOS</div>
+        <div class="kpi-val" id="kpi-vl-prod">-</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">BC ICMS</div>
+        <div class="kpi-val" id="kpi-bc-icms">-</div>
+      </div>
+      <div class="kpi y">
+        <div class="kpi-label">VL ICMS</div>
+        <div class="kpi-val" id="kpi-vl-icms">-</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">VL IPI</div>
+        <div class="kpi-val" id="kpi-vl-ipi">-</div>
+      </div>
+      <div class="kpi y">
+        <div class="kpi-label">BC ICMS-ST</div>
+        <div class="kpi-val" id="kpi-bc-icmsst">-</div>
+      </div>
+      <div class="kpi y">
+        <div class="kpi-label">VL ICMS-ST</div>
+        <div class="kpi-val" id="kpi-vl-icmsst">-</div>
+      </div>
+      <div class="kpi p">
+        <div class="kpi-label">BC FCP</div>
+        <div class="kpi-val" id="kpi-bc-fcpst">-</div>
+      </div>
+      <div class="kpi p">
+        <div class="kpi-label">VL FCP</div>
+        <div class="kpi-val" id="kpi-vl-fcpst">-</div>
+      </div>
+      <div class="kpi p">
+        <div class="kpi-label">VL TOTAL DA NOTA</div>
+        <div class="kpi-val" id="kpi-vl-nota">-</div>
+      </div>
+    </div>
+
+    <!-- CONTENT AREA -->
+    <div class="content-area">
+
+      <!-- TABBAR -->
+      <div class="tabbar">
+        <button class="tab active" data-target="panel-editor">Edicao de Fatores</button>
+        <button class="tab" data-target="panel-procv">PROCV (De/Para)</button>
+        <button class="tab" data-target="panel-completa">Dados Completos</button>
+        <button class="tab" data-target="panel-confronto">Confronto PC</button>
+        <button class="tab" data-target="panel-calc-unit">Calculadora Unit&#225;ria</button>
+        <button class="tab" data-target="panel-div-padrao">&#128203; Divergências Padrão</button>
+        <button class="tab" data-target="panel-cotacoes">&#127760; Cota&#231;&#245;es BCB</button>
+        <div class="tab-spacer"></div>
+        <div class="tab-action">
+          <button id="btn-recalc" class="btn btn-ghost btn-sm">Recalcular</button>
+        </div>
+      </div>
+
+      <!-- PANELS -->
+      <div class="panels">
+
+        <!-- PANEL: EDITOR -->
+        <div class="panel active" id="panel-editor">
+          <div class="panel-head">
+            <span class="panel-hint">Edite as colunas em <span class="green">verde</span> para ajustar fatores por item. Clique em Recalcular para atualizar.</span>
+          </div>
+          <div class="table-wrap" id="table-wrap-editor">
+            <div class="empty">
+              <div class="empty-icon">XML</div>
+              <p>Faca o upload dos XMLs para comecar.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL: PROCV -->
+        <div class="panel" id="panel-procv">
+          <div class="procv-config" id="procv-config-bar">
+            <div class="dz-inline" id="drop-zone-procv">
+              <span style="font-size:20px">REF</span>
+              <p>Upload <b>Excel/CSV</b> referencia</p>
+              <input type="file" id="upload-procv" accept=".xlsx,.xls,.csv" hidden>
+            </div>
+
+            <div id="procv-controls" style="display:none;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+              <div class="sel-group">
+                <label>Campo XML 1</label>
+                <select id="sel-xml-field">
+                  <option value="C&#243;d Produto">C&#243;d Produto</option>
+                  <option value="Descri&#231;&#227;o">Descri&#231;&#227;o</option>
+                  <option value="nItem">nItem</option>
+                </select>
+              </div>
+              <div class="sel-group">
+                <label>Campo XML 2 (Opc)</label>
+                <select id="sel-xml-field-2">
+                  <option value="">- Nenhum -</option>
+                  <option value="C&#243;d Produto">C&#243;d Produto</option>
+                  <option value="Descri&#231;&#227;o">Descri&#231;&#227;o</option>
+                  <option value="nItem">nItem</option>
+                </select>
+              </div>
+              <div class="sel-group">
+                <label>Chave 1 (Ref)</label>
+                <select id="sel-ref-chave"></select>
+              </div>
+              <div class="sel-group">
+                <label>Chave 2 (Opc)</label>
+                <select id="sel-ref-chave-2"></select>
+              </div>
+              <div class="sel-group">
+                <label>Pedido (Ref)</label>
+                <select id="sel-ref-pedido"></select>
+              </div>
+              <div class="sel-group">
+                <label>Item (Ref)</label>
+                <select id="sel-ref-item"></select>
+              </div>
+              <button id="btn-aplicar-procv" class="btn btn-primary btn-sm" style="width:auto">Aplicar PROCV</button>
+            </div>
+          </div>
+
+          <div class="procv-kpis" id="kpi-procv">
+            <div class="pkpi ok"><div class="pkpi-label">Encontrados</div><div class="pkpi-val" id="kpi-procv-encontrados">0</div></div>
+            <div class="pkpi nok"><div class="pkpi-label">Nao Encontrados</div><div class="pkpi-val" id="kpi-procv-nao-encontrados">0</div></div>
+          </div>
+
+          <div class="table-wrap" id="table-wrap-procv-preview">
+            <div class="empty"><div class="empty-icon">REF</div><p>Faca o upload da planilha de referencia.</p></div>
+          </div>
+        </div>
+
+        <!-- PANEL: DADOS COMPLETOS -->
+        <div class="panel" id="panel-completa">
+          <div class="panel-head">
+            <span class="panel-hint">Todos os campos calculados da NF-e.</span>
+            <button id="btn-export" class="btn btn-success btn-sm" style="width:auto">Exportar Excel</button>
+          </div>
+          <div class="table-wrap" id="table-wrap-completa">
+            <div class="empty"><div class="empty-icon">TAB</div><p>Nenhum dado calculado ainda.</p></div>
+          </div>
+        </div>
+
+        <!-- PANEL: CONFRONTO PC -->
+        <div class="panel" id="panel-confronto">
+          <div class="conf-head">
+            <div class="dz-inline" id="drop-zone-pc">
+              <span style="font-size:18px">PC</span>
+              <p>Upload Excel <b>Pedido de Compra</b></p>
+              <input type="file" id="upload-pc" accept=".xlsx,.xls" multiple hidden>
+            </div>
+            <button id="btn-limpar-pc" class="btn btn-secondary btn-sm" style="width:auto;display:none" title="Remover todos os arquivos PC">Limpar PC</button>
+
+            <button id="btn-executar-confronto" class="btn btn-primary btn-sm" style="width:auto" disabled>Confrontar</button>
+            <button id="btn-export-confronto" class="btn btn-success btn-sm" style="width:auto;display:none">Exportar Excel</button>
+            <button id="btn-open-div-modal" class="btn btn-secondary btn-sm" style="width:auto;display:none">Gerar Resumo Div.</button>
+          </div>
+
+          <div class="conf-kpis" id="kpi-confronto">
+            <div class="ckpi ok"><div class="ckpi-label">Matches</div><div class="ckpi-val" id="kpi-matches">0</div></div>
+            <div class="ckpi bad"><div class="ckpi-label">Sem Match</div><div class="ckpi-val" id="kpi-sem-match">0</div></div>
+            <div class="ckpi warn"><div class="ckpi-label">Dif. Preco</div><div class="ckpi-val" id="kpi-div-vl">0</div></div>
+            <div class="ckpi warn"><div class="ckpi-label">Dif. ICMS</div><div class="ckpi-val" id="kpi-div-icms">0</div></div>
+            <div class="ckpi warn"><div class="ckpi-label">Dif. IPI</div><div class="ckpi-val" id="kpi-div-ipi">0</div></div>
+            <div class="ckpi warn"><div class="ckpi-label">Dif. NCM</div><div class="ckpi-val" id="kpi-div-ncm">0</div></div>
+            <div class="ckpi warn"><div class="ckpi-label">Dif. Origem</div><div class="ckpi-val" id="kpi-div-orig">0</div></div>
+            <div class="ckpi warn"><div class="ckpi-label">Dif. ICMS ST</div><div class="ckpi-val" id="kpi-div-st">0</div></div>
+            <div class="ckpi warn"><div class="ckpi-label">Dif. BC RED</div><div class="ckpi-val" id="kpi-div-red-bc">0</div></div>
+          </div>
+
+          <details class="ped-toggle" id="ped-item-editor-wrap">
+            <summary>
+              <span class="arrow">></span>
+              Correcao de Chaves - Ped-Item
+            </summary>
+            <div class="ped-inner">
+              <div class="ped-hint">Preencha ou corrija as chaves (ex: 4900123-10). O confronto usara esses valores.</div>
+              <div class="ped-table-wrap" id="table-wrap-peditem">
+                <div class="empty" style="height:80px"><p>Processe os XMLs primeiro.</p></div>
+              </div>
+            </div>
+          </details>
+
+          <div class="conf-filter" id="conf-filter" style="display:none">
+            <span style="font-size:11px;color:var(--txt-3);font-family:var(--mono);margin-right:4px">Exibir:</span>
+            <button class="filter-btn active" data-filter="all">Todos</button>
+            <button class="filter-btn" data-filter="div">Divergencias</button>
+            <button class="filter-btn" data-filter="nm">Sem Match</button>
+          </div>
+
+          <div class="table-wrap" id="table-wrap-confronto-res">
+            <div class="empty"><div class="empty-icon">PC</div><p>Faca o upload do Pedido de Compra para iniciar.</p></div>
+          </div>
+        </div>
+
+        <!-- MODAL: GERADOR DE RESUMO DE DIVERGENCIAS -->
+        <div id="div-modal" class="modal-overlay">
+          <div class="modal-content">
+            <div class="modal-header">
+              <div class="modal-title">Gerador de Resumo para Abertura de Divergência</div>
+              <button class="modal-close" onclick="closeDivModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; background: var(--surface-2); padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <label style="font-size: 11px; color: var(--txt-3); font-family: var(--mono); text-transform: uppercase;">NFe:</label>
+                    <input type="text" id="div-nfe-input" placeholder="Ex: 1111" style="width: 90px; padding: 6px 10px; font-size: 13px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--txt-1); font-family: var(--mono);">
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <label style="font-size: 11px; color: var(--txt-3); font-family: var(--mono); text-transform: uppercase;">NÂº Divergência:</label>
+                    <input type="text" id="div-numero-input" placeholder="Ex: 634618" style="width: 100px; padding: 6px 10px; font-size: 13px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--txt-1); font-family: var(--mono);">
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <label style="font-size: 11px; color: var(--txt-3); font-family: var(--mono); text-transform: uppercase;">Chave de Acesso:</label>
+                    <input type="text" id="div-chave-input" placeholder="44 d&#237;gitos" style="width: 320px; padding: 6px 10px; font-size: 13px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--txt-1); font-family: var(--mono);">
+                  </div>
+                </div>
+              </div>
+              
+              <div style="margin-bottom: 12px; font-size: 11px; color: var(--txt-3); text-transform: uppercase; letter-spacing: 0.05em;">Selecione o tipo de divergência:</div>
+              <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                <button class="btn btn-secondary" style="padding: 8px 16px" onclick="generateDivSummary('Status Dif.', 'PREÇO')">Preço</button>
+                <button class="btn btn-secondary" style="padding: 8px 16px" onclick="generateDivSummary('Status ICMS', 'ICMS')">ICMS</button>
+                <button class="btn btn-secondary" style="padding: 8px 16px" onclick="generateDivSummary('Status IPI', 'IPI')">IPI</button>
+                <button class="btn btn-secondary" style="padding: 8px 16px" onclick="generateDivSummary('Status ICMS-ST', 'ICMS ST')">ICMS ST</button>
+                <button class="btn btn-secondary" style="padding: 8px 16px" onclick="generateDivSummary('Status NCM', 'NCM')">NCM</button>
+                <button class="btn btn-secondary" style="padding: 8px 16px" onclick="generateDivSummary('Status Origem', 'ORIGEM')">Origem</button>
+                <button class="btn btn-secondary" style="padding: 8px 16px" onclick="generateDivSummary('RED BC', 'RED BC')">RED BC</button>
+              </div>
+
+              <div style="position: relative;">
+                <textarea id="div-summary-output" readonly style="width: 100%; min-height: 120px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; color: var(--txt-1); font-family: var(--mono); font-size: 13px; padding: 16px 16px 45px 16px; resize: vertical; line-height: 1.6;" placeholder="Selecione um tipo acima para gerar o resumo..."></textarea>
+                <button id="btn-copy-summary" style="position: absolute; bottom: 12px; right: 12px; padding: 6px 12px; font-size: 11px; background: var(--hk-green-600); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">Copiar Texto</button>
+              </div>
+              
+              <div style="margin-top: 15px; font-size: 11px; color: var(--txt-3); font-style: italic;">
+                * NCM e Origem: até 6/7 itens â texto padrão. Acima disso â tabela tabulada pronta para colar no Excel.
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- PANEL: CALCULADORA UNITARIA -->
+        <div class="panel" id="panel-calc-unit">
+          <div class="panel-head" style="flex-direction:column;align-items:flex-start;gap:14px;overflow:auto">
+
+            <!-- inputs grid -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;width:100%">
+
+              <div class="sel-group">
+                <label>Tipo de Material</label>
+                <select id="cu-tipo" class="ie" style="width:100%">
+                  <option value="Ativo/Consumo">Ativo / Consumo</option>
+                  <option value="PA/Insumo">PA / Insumo</option>
+                </select>
+              </div>
+
+              <div class="sel-group">
+                <label>Pre&#231;o Unit&#225;rio (vUnCom)</label>
+                <input type="number" id="cu-preco" class="ie" style="width:100%;text-align:right" step="0.0001" placeholder="0,0000">
+              </div>
+
+              <div class="sel-group">
+                <label>Quantidade NF-e</label>
+                <input type="number" id="cu-qtd" class="ie" style="width:100%;text-align:right" step="1" value="1">
+              </div>
+
+              <div class="sel-group">
+                <label>% ICMS</label>
+                <input type="number" id="cu-icms" class="ie" style="width:100%;text-align:right" step="0.01" placeholder="0,00">
+              </div>
+
+              <div class="sel-group">
+                <label>% IPI</label>
+                <input type="number" id="cu-ipi" class="ie" style="width:100%;text-align:right" step="0.01" placeholder="0,00">
+              </div>
+
+              <div class="sel-group">
+                <label>% Red. BC ICMS</label>
+                <input type="number" id="cu-redbc" class="ie" style="width:100%;text-align:right" step="0.01" placeholder="0,00">
+              </div>
+
+              <div class="sel-group">
+                <label>% PIS + COFINS</label>
+                <input type="number" id="cu-pis" class="ie" style="width:100%;text-align:right" step="0.01" value="9.25">
+              </div>
+
+              <div class="sel-group">
+                <label>Taxa de C&#226;mbio</label>
+                <input type="number" id="cu-taxa" class="ie" style="width:100%;text-align:right" step="0.0001" value="1.0000">
+              </div>
+
+              <div class="sel-group">
+                <label>Multiplicador</label>
+                <input type="number" id="cu-mult" class="ie" style="width:100%;text-align:right" step="1" value="1">
+              </div>
+
+              <div class="sel-group">
+                <label>Fator de Convers&#227;o</label>
+                <input type="number" id="cu-fator" class="ie" style="width:100%;text-align:right" step="0.1" value="1">
+              </div>
+
+              <div class="sel-group">
+                <label>Outras Despesas (R$)</label>
+                <input type="number" id="cu-outras" class="ie" style="width:100%;text-align:right" step="0.01" placeholder="0,00">
+                <small>Somado ao BC ICMS</small>
+              </div>
+
+              <div class="sel-group" style="border-left:2px solid var(--hk-green-600);padding-left:10px">
+                <label style="color:var(--hk-green-200)">Pre&#231;o PC (confronto)</label>
+                <input type="number" id="cu-pc" class="ie" style="width:100%;text-align:right" step="0.0001" placeholder="0,0000">
+              </div>
+
+              <div class="sel-group" style="border-left:2px solid var(--hk-green-600);padding-left:10px">
+                <label style="color:var(--hk-green-200)">% Toler&#226;ncia</label>
+                <input type="number" id="cu-tol" class="ie" style="width:100%;text-align:right" step="0.1" value="15" placeholder="15">
+              </div>
+
+            </div>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <button id="cu-btn-calc" class="btn btn-primary btn-sm" style="width:auto">&#9654; Calcular</button>
+              <button id="cu-btn-clear" class="btn btn-secondary btn-sm" style="width:auto">Limpar</button>
+            </div>
+          </div>
+
+          <!-- resultado -->
+          <div class="table-wrap" id="cu-result-wrap" style="padding:16px">
+            <div class="empty" style="height:120px">
+              <div class="empty-icon" style="font-size:28px">&#8776;</div>
+              <p>Preencha os campos e clique em Calcular.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL: DIVERGÊNCIAS PADRÃO (Excel TrabalhoManus.xlsm) -->
+        <div class="panel" id="panel-div-padrao">
+          <div class="panel-head" style="flex-direction:column;align-items:flex-start;gap:14px;">
+            <div style="display:flex;align-items:center;gap:10px;width:100%">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em">Gerador de Divergências Padrão (Excel)</span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;width:100%">
+              <div class="sel-group">
+                <label>Tipo de Divergência</label>
+                <select id="dp-tipo" class="ie" style="width:100%"></select>
+              </div>
+              <div class="sel-group">
+                <label>Pedido de Compra</label>
+                <input type="text" id="dp-pedido" class="ie" style="width:100%" placeholder="Ex: 4503938952">
+              </div>
+              <div class="sel-group">
+                <label>Linhas (separadas por /)</label>
+                <input type="text" id="dp-linhas" class="ie" style="width:100%" placeholder="Ex: 10/20">
+              </div>
+              <div class="sel-group">
+                <label>Chave de Acesso NF-e</label>
+                <input type="text" id="dp-chave-nfe" class="ie" style="width:100%" placeholder="Chave com 44 dígitos">
+              </div>
+              <div class="sel-group">
+                <label>Chave de Acesso CT-e / CTE</label>
+                <input type="text" id="dp-chave-cte" class="ie" style="width:100%" placeholder="Chave CT-e ou Número">
+              </div>
+              <div class="sel-group">
+                <label>DT / Outras Informações</label>
+                <input type="text" id="dp-dt" class="ie" style="width:100%" placeholder="DT ou Informação extra">
+              </div>
+              <div class="sel-group">
+                <label>Motivo / Obs</label>
+                <input type="text" id="dp-motivo" class="ie" style="width:100%" placeholder="Motivo da divergência">
+              </div>
+              <div class="sel-group">
+                <label>Ação / Alinhamento</label>
+                <input type="text" id="dp-acao" class="ie" style="width:100%" placeholder="Ação necessária">
+              </div>
+              <div class="sel-group">
+                <label>Itinerário / Veículo / Transporte</label>
+                <input type="text" id="dp-itinerario" class="ie" style="width:100%" placeholder="Itinerário / Veículo / Transp.">
+              </div>
+            </div>
+          </div>
+
+          <div style="padding:20px; background:var(--surface-2); border-top:1px solid var(--line); border-radius:0 0 var(--radius) var(--radius)">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--txt-3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em">Texto Gerado Automaticamente</div>
+            <textarea id="dp-output" class="ie" style="width:100%;height:120px;font-family:var(--font);font-size:14px;padding:15px;line-height:1.6;resize:none" readonly placeholder="O texto aparecerá aqui conforme você preenche os campos..."></textarea>
+            <div style="margin-top:12px;display:flex;gap:10px">
+              <button id="dp-btn-copy" class="btn btn-primary btn-sm" style="width:auto">Copiar Texto</button>
+              <button id="dp-btn-clear" class="btn btn-secondary btn-sm" style="width:auto">Limpar Campos</button>
+              <button id="dp-btn-manage" class="btn btn-ghost btn-sm" style="width:auto;margin-left:auto" onclick="window.dpOpenManage()">Gerenciar Tipos Personalizados</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL: COTAÇÕES BCB -->
+        <div class="panel" id="panel-cotacoes">
+
+          <!-- CONFIG BAR -->
+          <div class="panel-head" style="flex-direction:column;align-items:flex-start;gap:14px;overflow:visible">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em">API PTAX · Banco Central do Brasil</span>
+              <div id="bcb-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--txt-3);flex-shrink:0"></div>
+              <span id="bcb-status-txt" style="font-family:var(--mono);font-size:10px;color:var(--txt-3)">pronto</span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;width:100%">
+              <!-- Moeda -->
+              <div class="sel-group">
+                <label>Moeda</label>
+                <select id="bcb-moeda" class="ie" style="width:100%">
+                  <option value="USD">USD · Dólar Americano</option>
+                  <option value="EUR">EUR · Euro</option>
+                  <option value="GBP">GBP · Libra Esterlina</option>
+                  <option value="JPY">JPY · Iene</option>
+                  <option value="CAD">CAD · Dólar Canadense</option>
+                  <option value="AUD">AUD · Dólar Australiano</option>
+                  <option value="CHF">CHF · Franco Suíço</option>
+                  <option value="CNY">CNY · Yuan Chinês</option>
+                  <option value="ARS">ARS · Peso Argentino</option>
+                  <option value="MXN">MXN · Peso Mexicano</option>
+                  <option value="CLP">CLP · Peso Chileno</option>
+                  <option value="NOK">NOK · Coroa Norueguesa</option>
+                  <option value="SEK">SEK · Coroa Sueca</option>
+                  <option value="DKK">DKK · Coroa Dinamarquesa</option>
+                </select>
+              </div>
+
+              <!-- Modo -->
+              <div class="sel-group">
+                <label>Modo de Consulta</label>
+                <select id="bcb-modo" class="ie" style="width:100%" onchange="bcbToggleMode()">
+                  <option value="hoje">Cotação de Hoje</option>
+                  <option value="data">Data Específica</option>
+                  <option value="periodo">Período</option>
+                </select>
+              </div>
+
+              <!-- Data única (visível em modo "data") -->
+              <div class="sel-group" id="bcb-group-data">
+                <label>Data</label>
+                <input type="date" id="bcb-data" class="ie" style="width:100%">
+              </div>
+
+              <!-- Data início (visível em modo "periodo") -->
+              <div class="sel-group" id="bcb-group-inicio" style="display:none">
+                <label>Data Início</label>
+                <input type="date" id="bcb-inicio" class="ie" style="width:100%">
+              </div>
+
+              <!-- Data fim (visível em modo "periodo") -->
+              <div class="sel-group" id="bcb-group-fim" style="display:none">
+                <label>Data Fim</label>
+                <input type="date" id="bcb-fim" class="ie" style="width:100%">
+              </div>
+
+              <!-- Boletim filter -->
+              <div class="sel-group" id="bcb-group-boletim">
+                <label>Tipo de Boletim</label>
+                <select id="bcb-boletim" class="ie" style="width:100%">
+                  <option value="all">Todos os boletins</option>
+                  <option value="Fechamento PTAX">Fechamento PTAX</option>
+                  <option value="Abertura">Abertura</option>
+                  <option value="Intermediário">Intermediário</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <button id="bcb-btn-buscar" class="btn btn-primary btn-sm" style="width:auto" onclick="bcbBuscar()">&#9654; Buscar Cotação</button>
+              <button class="btn btn-secondary btn-sm" style="width:auto" onclick="bcbLimpar()">Limpar</button>
+              <div id="bcb-usar-wrap" style="display:none;margin-left:8px">
+                <button id="bcb-btn-usar" class="btn btn-success btn-sm" style="width:auto" onclick="bcbUsarTaxa()">
+                  &#8594; Usar Taxa na Calculadora
+                </button>
+                <span id="bcb-taxa-selecionada" style="font-family:var(--mono);font-size:11px;color:var(--hk-green-200);margin-left:8px"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- RESULTADO -->
+          <div class="table-wrap" id="bcb-result-wrap" style="padding:16px">
+            <div class="empty" style="height:140px">
+              <div class="empty-icon" style="font-size:28px">ð¦</div>
+              <p>Selecione moeda e período, depois clique em Buscar.</p>
+            </div>
+          </div>
+        </div>
+        <!-- /PANEL COTAÃÃES -->
+
+    </div><!-- /content-area -->
+  </div><!-- /main -->
+</div><!-- /workspace -->
+<!-- LOADING -->
+<div id="overlay">
+  <div class="spin"></div>
+  <div class="spin-txt">Processando...</div>
+</div>
+
+<script>
+/* 
+   DOM REFS  (IDs idênticos ao app.js original)
+ */
+const $ = id => document.getElementById(id);
+const DOM = {
+  dropZone:       $('drop-zone-xml'),
+  uploadInput:    $('upload-xml'),
+  btnProcessar:   $('btn-processar'),
+  btnRecalc:      $('btn-recalc'),
+  btnExport:      $('btn-export'),
+  selTipo:        $('sel-tipo'),
+  inpPis:         $('inp-pis'),
+  inpTaxa:        $('inp-taxa'),
+  kpiItens:       $('kpi-itens'),
+  kpiVlProd:      $('kpi-vl-prod'),
+  kpiVlIcms:      $('kpi-vl-icms'),
+  kpiVlPis:       $('kpi-vl-pis'),
+  kpiBcIcms:      $('kpi-bc-icms'),
+  kpiBcIpi:       $('kpi-bc-ipi'),
+  kpiVlIpi:       $('kpi-vl-ipi'),
+  kpiBcIcmsSt:    $('kpi-bc-icmsst'),
+  kpiVlIcmsSt:    $('kpi-vl-icmsst'),
+  kpiBcFcpSt:     $('kpi-bc-fcpst'),
+  kpiVlFcpSt:     $('kpi-vl-fcpst'),
+  kpiDivOrig:     $('kpi-div-orig'),
+  kpiDivSt:       $('kpi-div-st'),
+  kpiVlNota:      $('kpi-vl-nota'),
+  tabs:           document.querySelectorAll('.tab[data-target]'),
+  panes:          document.querySelectorAll('.panel'),
+  wrapEditor:     $('table-wrap-editor'),
+  wrapCompleta:   $('table-wrap-completa'),
+  loading:        $('overlay'),
+  dropZoneProcv:  $('drop-zone-procv'),
+  uploadProcv:    $('upload-procv'),
+  procvControls:  $('procv-controls'),
+  selXmlField:    $('sel-xml-field'),
+  selXmlField2:   $('sel-xml-field-2'),
+  selRefChave:    $('sel-ref-chave'),
+  selRefChave2:   $('sel-ref-chave-2'),
+  selRefPedido:   $('sel-ref-pedido'),
+  selRefItem:     $('sel-ref-item'),
+  btnLimparTudo:  $('btn-limpar-dados'),
+  xmlHistorySec:  $('xml-history-section'),
+  xmlHistoryList: $('xml-history-list'),
+  btnAplicarProcv:$('btn-aplicar-procv'),
+  wrapProcvPreview:$('table-wrap-procv-preview'),
+  kpiProcv:       $('kpi-procv'),
+  kpiProcvEncontrados:   $('kpi-procv-encontrados'),
+  kpiProcvNaoEncontrados:$('kpi-procv-nao-encontrados'),
+  dropZonePc:     $('drop-zone-pc'),
+  uploadPc:       $('upload-pc'),
+  btnLimparPc:    $('btn-limpar-pc'),
+  btnExecutarConfronto:$('btn-executar-confronto'),
+  btnExportConfronto:  $('btn-export-confronto'),
+  wrapPedItem:    $('table-wrap-peditem'),
+  wrapConfrontoRes:$('table-wrap-confronto-res'),
+  kpiConfronto:   $('kpi-confronto'),
+  kpiMatches:     $('kpi-matches'),
+  kpiSemMatch:    $('kpi-sem-match'),
+  kpiDivVl:       $('kpi-div-vl'),
+  kpiDivIcms:     $('kpi-div-icms'),
+  kpiDivIpi:      $('kpi-div-ipi'),
+  kpiDivNcm:      $('kpi-div-ncm'),
+  kpiDivOrig:     $('kpi-div-orig'),
+  kpiDivSt:       $('kpi-div-st'),
+  kpiDivRedBc:    $('kpi-div-red-bc'),
+};
+
+const AppState = { files:[], data:[], baseLoaded:false, filesPc:[], fileProcv:null, confrontoData:[], currentFilter:'all', persistentHistory: [] };
+
+const formatBR = (val,dec=2) => {
+  if(val===null||val===undefined||isNaN(val)) return '-';
+  return new Intl.NumberFormat('pt-BR',{minimumFractionDigits:dec,maximumFractionDigits:dec}).format(val);
+};
+
+/* ââ THEME TOGGLE ââ */
+(function(){
+  const html   = document.documentElement;
+  const btn    = $('btn-theme');
+  const icon   = $('theme-icon');
+  const label  = $('theme-label');
+  const KEY    = 'nfe-theme';
+
+  function applyTheme(mode){
+    if(mode === 'light'){
+      html.classList.add('light');
+      icon.textContent  = '🌙';
+      label.textContent = 'Dark';
+    } else {
+      html.classList.remove('light');
+      icon.textContent  = '☀️';
+      label.textContent = 'Light';
+    }
+    localStorage.setItem(KEY, mode);
+  }
+
+  // Restore saved preference
+  const saved = localStorage.getItem(KEY) || 'dark';
+  applyTheme(saved);
+
+  btn.addEventListener('click', () => {
+    const next = html.classList.contains('light') ? 'dark' : 'light';
+    applyTheme(next);
+  });
+})();
+
+/* Ã¢ââ¬Ã¢ââ¬ TABS Ã¢ââ¬Ã¢ââ¬ */
+DOM.tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    DOM.tabs.forEach(t => t.classList.remove('active'));
+    DOM.panes.forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $(tab.dataset.target).classList.add('active');
+  });
+});
+
+/* Ã¢ââ¬Ã¢ââ¬ LOADING Ã¢ââ¬Ã¢ââ¬ */
+const showLoading = () => DOM.loading.classList.add('show');
+const hideLoading = () => DOM.loading.classList.remove('show');
+
+/* 
+   UPLOAD XML
+ */
+DOM.dropZone.addEventListener('dragover', e => { e.preventDefault(); DOM.dropZone.classList.add('over'); });
+DOM.dropZone.addEventListener('dragleave', () => DOM.dropZone.classList.remove('over'));
+DOM.dropZone.addEventListener('drop', e => {
+  e.preventDefault(); DOM.dropZone.classList.remove('over');
+  if(e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+DOM.dropZone.addEventListener('click', () => DOM.uploadInput.click());
+DOM.uploadInput.addEventListener('change', e => { if(e.target.files.length) handleFiles(e.target.files); });
+
+function handleFiles(files) {
+  const xml = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.xml'));
+  if(!xml.length){ alert('Selecione apenas arquivos XML.'); return; }
+  AppState.files = xml;
+  DOM.dropZone.querySelector('p').innerHTML = `<b>${xml.length} arquivo(s) pronto(s).</b> Clique em Processar.`;
+  DOM.dropZone.classList.add('has-files');
+  DOM.btnProcessar.disabled = false;
+}
+
+/* 
+   API
+ */
+const API = window.location.origin + '/api';
+
+/* ââ PARSE XML CLIENT-SIDE para extrair nNF e cProd ââ */
+function parseXmlClientSide(xmlText) {
+  // Retorna: { nNF, chNFe, itens: [{cProd, xProd, nItem}] }
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'application/xml');
+
+  // nNF - numero da nota fiscal (no infNFe > ide > nNF)
+  const nNFEl = doc.querySelector('nNF');
+  const nNF = nNFEl ? nNFEl.textContent.trim() : '';
+
+  // chNFe - chave de acesso (atributo Id do infNFe ou tag chNFe)
+  let chNFe = '';
+  const infNFe = doc.querySelector('infNFe');
+  if (infNFe) {
+    const idAttr = infNFe.getAttribute('Id');
+    if (idAttr) chNFe = idAttr.replace(/^NFe/, '');
+  }
+  if (!chNFe) {
+    const chEl = doc.querySelector('chNFe');
+    if (chEl) chNFe = chEl.textContent.trim();
+  }
+
+  // itens - cada <det> tem nItem no atributo e <prod> com <cProd>, <xProd>
+  const dets = doc.querySelectorAll('det');
+  const itens = [];
+  dets.forEach(det => {
+    const nItem = det.getAttribute('nItem') || '';
+    const cProdEl = det.querySelector('prod > cProd');
+    const xProdEl = det.querySelector('prod > xProd');
+    const cProd = cProdEl ? cProdEl.textContent.trim() : '';
+    const xProd = xProdEl ? xProdEl.textContent.trim() : '';
+    itens.push({ nItem, cProd, xProd });
+  });
+
+  return { nNF, chNFe, itens };
+}
+
+async function enrichDataWithXmlFields(files, data) {
+  // Lê todos XMLs client-side e enriquece AppState.data com nNF e cProd
+  const xmlInfos = [];
+  for (const file of files) {
+    const text = await file.text();
+    xmlInfos.push(parseXmlClientSide(text));
+  }
+
+  // Constrói mapa: cProd -> [{ nNF, chNFe }, ...]
+  // Mantém TODAS as NFs que contêm o mesmo cProd (produto igual em notas diferentes)
+  const prodMap = {};
+  xmlInfos.forEach(info => {
+    info.itens.forEach(item => {
+      if (item.cProd) {
+        if (!prodMap[item.cProd]) prodMap[item.cProd] = [];
+        // Evita duplicar a mesma NF no array
+        if (!prodMap[item.cProd].some(e => e.nNF === info.nNF)) {
+          prodMap[item.cProd].push({ nNF: info.nNF, chNFe: info.chNFe });
+        }
+      }
+    });
+  });
+
+  // Constrói mapa de itens por XML para fallback por descrição
+  // xmlInfos[i] corresponde a files[i]
+
+  // Enriquece cada linha do data usando uma abordagem baseada em XML e posição
+  // O backend processa os XMLs na ordem enviada. Vamos mapear as linhas do data de volta aos XMLs.
+  let currentDataIdx = 0;
+  
+  for (let xi = 0; xi < xmlInfos.length; xi++) {
+    const info = xmlInfos[xi];
+    const numItensNoXml = info.itens.length;
+    
+    // As próximas 'numItensNoXml' linhas no 'data' pertencem a este XML
+    for (let i = 0; i < numItensNoXml; i++) {
+      const r = data[currentDataIdx];
+      if (!r) break;
+      
+      const xmlItem = info.itens[i];
+      
+      // Atribuição prioritária baseada na estrutura do XML
+      r['NÂº NF'] = info.nNF;
+      r['Chave NF-e'] = info.chNFe;
+      
+      // Sincroniza o Código do Produto (cProd) do XML para o objeto de dados
+      // Isso garante que o código venha do XML correto mesmo se o material for igual
+      r['cProd'] = xmlItem.cProd;
+      r['Cód. Material'] = xmlItem.cProd;
+      
+      // Mantém a descrição original se existir, ou usa a do XML
+      if (!r['Descrição'] && !r['Descrição'] && !r['Descricao']) {
+        r['Descricao'] = xmlItem.xProd;
+      }
+      
+      currentDataIdx++;
+    }
+  }
+  
+  // Caso existam linhas remanescentes (não esperado, mas por segurança)
+  for (let i = currentDataIdx; i < data.length; i++) {
+    const r = data[i];
+    const existingCprod = r['cProd'] || r['Cód. Material'] || r['Cód Material'] || '';
+    if (existingCprod && prodMap[existingCprod]) {
+      const entries = prodMap[existingCprod];
+      r['NÂº NF'] = entries[0].nNF;
+      r['Chave NF-e'] = entries[0].chNFe;
+      r['Cód. Material'] = existingCprod;
+    }
+  }
+
+  return data;
+}
+
+DOM.btnProcessar.addEventListener('click', async () => {
+  if(!AppState.files.length) return;
+  const fd = new FormData();
+  AppState.files.forEach(f => fd.append('files', f));
+  showLoading();
+  try {
+    const res = await fetch(`${API}/upload-xml`, { method:'POST', body:fd });
+    const json = await res.json();
+    if(!res.ok) throw new Error(json.detail||json.message||'Erro no processamento');
+    AppState.data = json.data;
+    console.log("DEBUG - Dados recebidos do XML:", AppState.data[0]);
+    AppState.baseLoaded = true;
+
+    // ââ ENRIQUECIMENTO CLIENT-SIDE: lê nNF e cProd diretamente dos XMLs ââ
+    AppState.data = await enrichDataWithXmlFields(AppState.files, AppState.data);
+    console.log("DEBUG - Dados após enriquecimento client-side:", AppState.data[0]);
+
+    // Preenchimento automático do Gerador de Divergências (usa a primeira NF encontrada apenas para o modal)
+    if (AppState.data.length > 0) {
+      const primeiraComNF = AppState.data.find(r => r['NÂº NF'] || r['NF'] || r['nNF'] || r['NFe'] || r['Número NF'] || r['Numero NF'] || r['Nota']) || {};
+      const nfValue = primeiraComNF['NÂº NF'] || primeiraComNF['NF'] || primeiraComNF['nNF'] || primeiraComNF['NFe'] || primeiraComNF['Número NF'] || primeiraComNF['Numero NF'] || primeiraComNF['Nota'] || '';
+      const primeiraComChave = AppState.data.find(r => r['Chave NF-e'] || r['Chave'] || r['chNFe']) || {};
+      const chaveValue = primeiraComChave['Chave NF-e'] || primeiraComChave['Chave'] || primeiraComChave['chNFe'] || '';
+      const nfeInput = document.getElementById('div-nfe-input');
+      const chaveInput = document.getElementById('div-chave-input');
+      if (nfeInput) nfeInput.value = nfValue;
+      if (chaveInput) chaveInput.value = chaveValue;
+    }
+
+    // Salva no Histórico Persistente
+    const processedNFs = [];
+    AppState.data.forEach(r => {
+      const nf = r['NÂº NF'] || r['NF'] || '';
+      const chave = r['Chave NF-e'] || r['Chave'] || '';
+      if(nf && chave && !processedNFs.some(x => x.nf === nf)) {
+        processedNFs.push({ nf, chave, date: new Date().toLocaleString('pt-BR') });
+      }
+    });
+    savePersistentHistory(processedNFs);
+
+    // Atualiza Histórico da Sessão
+    DOM.xmlHistoryList.innerHTML = '';
+    AppState.files.forEach(f => {
+      const li = document.createElement('div');
+      li.className = 'xml-history-item';
+      // Tenta extrair o número da NF do nome do arquivo ou dos dados
+      const fileName = f.name;
+      li.innerHTML = `<div class="status-dot"></div><span>${fileName}</span>`;
+      li.title = "Clique para localizar itens desta NF no Editor";
+      
+      li.onclick = () => {
+        // Alterna para a aba Editor
+        DOM.tabs.forEach(t => t.classList.toggle('active', t.dataset.target === 'panel-editor'));
+        DOM.panes.forEach(p => p.classList.toggle('active', p.id === 'panel-editor'));
+        
+        // Localiza a NF correspondente a este arquivo nos dados
+        // O enrichDataWithXmlFields associa nNF ao objeto. Vamos tentar achar a nNF no texto do arquivo ou por índice.
+        // Como processamos os arquivos em ordem, podemos tentar um mapeamento simples.
+        // Uma forma mais segura é buscar por texto no nome do arquivo que combine com a coluna NF da tabela.
+        const rows = DOM.wrapEditor.querySelectorAll('tbody tr');
+        let found = false;
+        rows.forEach(tr => {
+          const nfCell = tr.cells[0].textContent;
+          if (fileName.includes(nfCell) && nfCell !== '-') {
+            tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            tr.style.backgroundColor = 'rgba(44,207,102,0.2)';
+            setTimeout(() => tr.style.backgroundColor = '', 2000);
+            found = true;
+          }
+        });
+        if(!found) {
+           // Se não achou pelo nome, tenta o primeiro item que encontrar (fallback)
+           console.log("NF não localizada exatamente pelo nome do arquivo.");
+        }
+      };
+      DOM.xmlHistoryList.appendChild(li);
+    });
+    DOM.xmlHistorySec.style.display = 'block';
+    DOM.btnLimparTudo.style.display = 'block';
+
+    await callRecalc();
+    
+    // Altera para a aba Editor automaticamente
+    DOM.tabs.forEach(t => t.classList.toggle('active', t.dataset.target === 'panel-editor'));
+    DOM.panes.forEach(p => p.classList.toggle('active', p.id === 'panel-editor'));
+    
+    DOM.btnProcessar.disabled = true;
+    DOM.btnProcessar.textContent = 'Processado';
+    DOM.dropZone.classList.remove('has-files');
+    DOM.dropZone.querySelector('p').innerHTML = `Arraste arquivos <b>XML NF-e</b><br>ou clique para selecionar`;
+
+  } catch(e){ alert(e.message); }
+  finally{ hideLoading(); }
+});
+
+/* ââ LIMPAR DADOS ââ */
+DOM.btnLimparTudo.addEventListener('click', () => {
+  if(!confirm('Deseja realmente limpar todos os dados e arquivos carregados?')) return;
+  
+  // Reset AppState
+  AppState.files = [];
+  AppState.data = [];
+  AppState.baseLoaded = false;
+  AppState.filesPc = [];
+  AppState.fileProcv = null;
+  AppState.confrontoData = [];
+  
+  // Reset UI
+  DOM.btnProcessar.disabled = true;
+  DOM.btnProcessar.textContent = 'Processar XMLs';
+  DOM.btnLimparTudo.style.display = 'none';
+  DOM.xmlHistorySec.style.display = 'none';
+  DOM.xmlHistoryList.innerHTML = '';
+  DOM.dropZone.classList.remove('has-files');
+  DOM.dropZone.classList.remove('over');
+  DOM.uploadInput.value = ''; // Limpa o input file para permitir selecionar os mesmos arquivos novamente
+  DOM.dropZone.querySelector('p').innerHTML = `Arraste arquivos <b>XML NF-e</b><br>ou clique para selecionar`;
+  
+  // Limpar tabelas
+  DOM.wrapEditor.innerHTML = '<div class="empty"><div class="empty-icon">ð</div><p>Nenhum item encontrado.</p></div>';
+  DOM.wrapCompleta.innerHTML = '<div class="empty"><div class="empty-icon">ð</div><p>Nenhum dado.</p></div>';
+  DOM.wrapPedItem.innerHTML = '<div class="empty" style="height:80px"><p>Processe os XMLs primeiro.</p></div>';
+  DOM.wrapConfrontoRes.innerHTML = '';
+  
+  // Reset KPIs
+  updateKPIs();
+  
+  // Reset Confronto
+  DOM.btnExecutarConfronto.disabled = true;
+  DOM.btnExportConfronto.style.display = 'none';
+  document.getElementById('btn-open-div-modal').style.display = 'none';
+  DOM.kpiMatches.textContent = '0';
+  DOM.kpiSemMatch.textContent = '0';
+  DOM.kpiDivVl.textContent = '0';
+  DOM.kpiDivIcms.textContent = '0';
+  DOM.kpiDivIpi.textContent = '0';
+  DOM.kpiDivNcm.textContent = '0';
+  DOM.kpiDivOrig.textContent = '0';
+  DOM.kpiDivSt.textContent = '0';
+  DOM.kpiDivRedBc.textContent = '0';
+
+  alert('Dados limpos com sucesso.');
+});
+
+/* ââ HISTÃRICO PERSISTENTE (LOCALSTORAGE) ââ */
+function savePersistentHistory(newItems) {
+  let history = JSON.parse(localStorage.getItem('nfe_persistent_history') || '[]');
+  
+  newItems.forEach(item => {
+    // Filtra apenas os itens da AppState.data que pertencem a esta NF específica
+    const nfData = AppState.data.filter(r => (r['NÂº NF'] || r['NF'] || '') === item.nf);
+    
+    // Cria o objeto de sessão completa
+    const sessionItem = {
+      nf: item.nf,
+      chave: item.chave,
+      date: item.date,
+      data: nfData // Salva todos os itens processados desta NF
+    };
+
+    // Remove se já existir (para mover para o topo)
+    history = history.filter(h => h.chave !== item.chave);
+    history.unshift(sessionItem);
+  });
+  
+  // Limita a 10
+  history = history.slice(0, 10);
+  try {
+    localStorage.setItem('nfe_persistent_history', JSON.stringify(history));
+  } catch(e) {
+    console.warn("LocalStorage cheio, removendo itens antigos...");
+    history = history.slice(0, 5); // Tenta salvar apenas os 5 mais recentes se der erro de espaço
+    localStorage.setItem('nfe_persistent_history', JSON.stringify(history));
+  }
+  renderPersistentHistory();
+}
+
+function renderPersistentHistory() {
+  const history = JSON.parse(localStorage.getItem('nfe_persistent_history') || '[]');
+  const list = document.getElementById('ph-list');
+  if(!list) return;
+  
+  if(history.length === 0) {
+    list.innerHTML = '<div style="font-size:10px;color:var(--txt-3);text-align:center;padding:10px;opacity:0.5">Nenhuma consulta recente.</div>';
+    return;
+  }
+  
+  list.innerHTML = history.map(h => `
+    <div class="ph-item" onclick="useHistoryItem('${h.nf}', '${h.chave}')">
+      <div class="ph-nf">NF: ${h.nf}</div>
+      <div class="ph-chave" title="${h.chave}">${h.chave}</div>
+      <div class="ph-date">${h.date}</div>
+    </div>
+  `).join('');
+}
+
+window.useHistoryItem = function(nf, chave) {
+  const history = JSON.parse(localStorage.getItem('nfe_persistent_history') || '[]');
+  const session = history.find(h => h.chave === chave);
+  
+  if(!session || !session.data || session.data.length === 0) {
+    alert("Dados desta consulta não encontrados no cache.");
+    return;
+  }
+
+  if(!confirm(`Deseja carregar os dados da NF ${nf} na tela de Edição? Isso substituirá os dados atuais.`)) return;
+
+  // Carrega os dados salvos no AppState
+  AppState.data = JSON.parse(JSON.stringify(session.data));
+  AppState.baseLoaded = true;
+  AppState.files = []; // Arquivos físicos não podem ser recuperados, mas os dados sim
+  
+  // Atualiza a UI
+  updateKPIs();
+  renderEditorTable();
+  renderCompleteTable();
+  renderPedItemEditor();
+  
+  // Preenche campos do modal DIV
+  const nfeInput = document.getElementById('div-nfe-input');
+  const chaveInput = document.getElementById('div-chave-input');
+  if(nfeInput) nfeInput.value = nf;
+  if(chaveInput) chaveInput.value = chave;
+
+  // Habilita botões necessários
+  DOM.btnLimparTudo.style.display = 'block';
+  DOM.btnProcessar.disabled = true;
+  DOM.btnProcessar.textContent = 'Carregado do Histórico';
+  
+  // Alterna para a aba Editor
+  DOM.tabs.forEach(t => t.classList.toggle('active', t.dataset.target === 'panel-editor'));
+  DOM.panes.forEach(p => p.classList.toggle('active', p.id === 'panel-editor'));
+
+  // Feedback visual
+  console.log(`Sessão da NF ${nf} restaurada com sucesso.`);
+};
+
+// Inicializa ao carregar a página
+renderPersistentHistory();
+
+DOM.btnRecalc.addEventListener('click', async () => {
+  const trs = DOM.wrapEditor.querySelectorAll('tbody tr');
+  trs.forEach(tr => {
+    const id = parseInt(tr.dataset.id);
+    const ref = AppState.data.find(d => d._id === id);
+    if(ref){
+      ref['Fator Conv.']   = parseFloat(tr.querySelector('.inp-fator').value) || 1;
+      ref['Multiplicador'] = parseFloat(tr.querySelector('.inp-mult').value)  || 1;
+      const pisRaw = tr.querySelector('.inp-pis').value;
+      ref['% PIS+COFINS']  = (pisRaw !== '' && pisRaw !== null) ? parseFloat(pisRaw) : null;
+      const taxaRaw = tr.querySelector('.inp-taxa-row').value;
+      ref['Taxa Câmbio']   = (taxaRaw !== '' && taxaRaw !== null) ? parseFloat(taxaRaw) : null;
+      ref['Tipo Material'] = tr.querySelector('.inp-tipo').value || null;
+    }
+  });
+  showLoading();
+  await callRecalc();
+  hideLoading();
+});
+
+async function callRecalc() {
+  const payload = {
+    data: AppState.data,
+    pis_rate: parseFloat(DOM.inpPis.value)||0,
+    taxa_efetiva: parseFloat(DOM.inpTaxa.value)||1,
+    tipo_global: DOM.selTipo.value
+  };
+  try {
+    const res = await fetch(`${API}/recalc`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const json = await res.json();
+    if(!res.ok) throw new Error('Erro no recalc');
+    AppState.data = json.data;
+    updateKPIs();
+    renderEditorTable();
+    renderCompleteTable();
+    renderPedItemEditor();
+  } catch(e){ console.error(e); alert('Falha ao calcular.'); }
+}
+
+/* 
+   KPIs
+ */
+function updateKPIs() {
+  // Os cards de resumo devem refletir sempre os valores ORIGINAIS do XML,
+  // sem aplicar taxa de cÃ¢mbio, multiplicadores ou ediçÃµes manuais.
+  let vlProd=0, vlIcms=0, vlPis=0, vlNota=0;
+  let bcIcms=0, bcIpi=0, vlIpi=0, bcIcmsSt=0, vlIcmsSt=0, bcFcpSt=0, vlFcpSt=0;
+  let vlFrete=0, vlSeguro=0, vlDesconto=0, vlOutrasDespesas=0;
+
+  const processedNFs = new Set();
+
+  AppState.data.forEach(r => {
+    const chaveNF = r['Chave NF-e'] || r['NÂº NF'];
+
+    // Soma individual por item usando valores brutos originais do XML
+    vlProd    += (parseFloat(r['Vl Produto'])||0);
+    bcIcms    += (parseFloat(r['BC ICMS'])||0);
+    vlIcms    += (parseFloat(r['Vl ICMS'])||0);
+    bcIpi     += (parseFloat(r['BC IPI'])||0);
+    vlIpi     += (parseFloat(r['Vl IPI'])||0);
+    bcIcmsSt  += (parseFloat(r['BC ICMS-ST'])||0);
+    vlIcmsSt  += (parseFloat(r['Vl ICMS-ST'])||0);
+    bcFcpSt   += (parseFloat(r['BC FCP-ST'])||0);
+    vlFcpSt   += (parseFloat(r['Vl FCP-ST'])||0);
+    vlPis     += (parseFloat(r['Vl PIS+COFINS'])||0);
+    
+    // Totais de cabeçalho (Frete, Seguro, etc.) somados uma vez por nota fiscal
+    if (!processedNFs.has(chaveNF)) {
+      vlFrete    += parseFloat(r['vFrete'] || 0);
+      vlSeguro   += parseFloat(r['vSeg'] || 0);
+      vlDesconto += parseFloat(r['vDesc'] || 0);
+      vlOutrasDespesas += parseFloat(r['vOutro'] || 0);
+      vlNota     += parseFloat(r['vNF'] || 0);
+      processedNFs.add(chaveNF);
+    }
+  });
+
+  // Fallback de cálculo se o vNF não estiver presente
+  if (vlNota === 0 && AppState.data.length > 0) {
+    vlNota = vlProd + vlIpi + vlIcmsSt + vlFrete + vlSeguro + vlOutrasDespesas - vlDesconto;
+  }
+
+  if(DOM.kpiItens) DOM.kpiItens.textContent      = AppState.data.length.toLocaleString('pt-BR');
+  if(DOM.kpiVlProd) DOM.kpiVlProd.textContent     = 'R$ '+formatBR(vlProd);
+  if(DOM.kpiVlIcms) DOM.kpiVlIcms.textContent     = 'R$ '+formatBR(vlIcms);
+  if(DOM.kpiBcIcms) DOM.kpiBcIcms.textContent     = 'R$ '+formatBR(bcIcms);
+  if(DOM.kpiVlIpi) DOM.kpiVlIpi.textContent      = 'R$ '+formatBR(vlIpi);
+  if(DOM.kpiBcIcmsSt) DOM.kpiBcIcmsSt.textContent   = 'R$ '+formatBR(bcIcmsSt);
+  if(DOM.kpiVlIcmsSt) DOM.kpiVlIcmsSt.textContent   = 'R$ '+formatBR(vlIcmsSt);
+  if(DOM.kpiBcFcpSt) DOM.kpiBcFcpSt.textContent    = 'R$ '+formatBR(bcFcpSt);
+  if(DOM.kpiVlFcpSt) DOM.kpiVlFcpSt.textContent    = 'R$ '+formatBR(vlFcpSt);
+  if(DOM.kpiVlNota) DOM.kpiVlNota.textContent     = 'R$ '+formatBR(vlNota);
+}
+
+/* 
+   RENDER EDITOR TABLE
+ */
+function renderEditorTable() {
+  const data = AppState.data;
+  if(!data.length){ DOM.wrapEditor.innerHTML='<div class="empty"><div class="empty-icon">Ã°Å¸ââ</div><p>Nenhum item encontrado.</p></div>'; return; }
+  let h = `<table class="dt"><thead><tr>
+    <th>NF</th><th>Cod Prod</th><th>Descricao</th><th class="r">Qtd NF-e</th>
+    <th class="r">Vl Unit</th><th class="r">% ICMS</th><th class="r">% IPI</th>
+    <th class="th-green">Tipo</th>
+    <th class="th-green r" title="Informe a Qtd do Pedido -> Fator calculado automaticamente">Qtd Pedido</th>
+    <th class="th-green r">Fator</th>
+    <th class="th-green r">Mult.</th><th class="th-green r">% PIS+COF</th>
+    <th class="th-green r">Taxa Camb.</th><th class="r th-highlight-liq">Preco Liq Total</th><th class="r" style="color:var(--warn);white-space:nowrap">VL Liq MIRO</th>
+  </tr></thead><tbody>`;
+  data.forEach(r => {
+    const tipo = r['Tipo Material'] || DOM.selTipo.value;
+    const pis  = r['% PIS+COFINS'] != null ? r['% PIS+COFINS'] : '';
+    const tx   = r['Taxa Câmbio']  != null ? r['Taxa Câmbio']  : '';
+    const qtdNfe = parseFloat(r['Qtd']) || 1;
+    const fator  = parseFloat(r['Fator Conv.']) || 1;
+    const qtdPed = Math.round(qtdNfe * fator * 100000) / 100000;
+    
+    // Mapeamento ampliado para NF e Código do Produto
+    const nf = r['NÂº NF'] || r['NF'] || r['nNF'] || r['NFe'] || r['Número NF'] || r['Numero NF'] || r['Nota'] || r['nNF'] || '-';
+    const codProd = r['Cód. Material'] || r['cProd'] || r['Cód Material'] || r['Cod Material'] || r['Cód. Material'] || r['Cód Material'] || r['Cód Produto'] || r['Cod Produto'] || r['Código'] || r['Cod.'] || '';
+    
+    const descricao = r['Descrição'] ?? r['Descri\u00e7\u00e3o'] ?? r['Descricao'] ?? '';
+    const precoLiq = r['Preço Líq Total'] ?? r['Pre\u00e7o L\u00edq Total'] ?? r['Preco Liq Total'] ?? 0;
+    const vlLiqMiro = precoLiq * qtdPed;
+    h += `<tr data-id="${r._id}">
+      <td class="muted" style="font-weight:bold">${nf}</td>
+      <td class="muted" style="font-weight:bold">${codProd}</td>
+      <td title="${descricao}">${descricao.substring(0,28)}${descricao.length>28?'...':''}</td>
+      <td class="r">${formatBR(r['Qtd'])}</td>
+      <td class="r">${formatBR(r['Vl Unit'])}</td>
+      <td class="r">${formatBR(r['% ICMS'])}</td>
+      <td class="r">${formatBR(r['% IPI'])}</td>
+      <td><select class="ie inp-tipo">
+        <option value="Ativo/Consumo"${tipo==='Ativo/Consumo'?' selected':''}>Ativo/Consumo</option>
+        <option value="PA/Insumo"${tipo==='PA/Insumo'?' selected':''}>PA/Insumo</option>
+      </select></td>
+      <td class="r"><input class="ie inp-qtd-ped" type="number" step="1" style="width:80px"
+        value="${qtdPed}" title="Fator = Qtd Pedido / Qtd NF-e. NF-e: ${qtdNfe}"></td>
+      <td class="r"><input class="ie inp-fator" type="number" step="0.00001" style="width:80px;opacity:.75" value="${fator}" readonly></td>
+      <td class="r"><input class="ie inp-mult"  type="number" step="1"   value="${r['Multiplicador']}"></td>
+      <td class="r"><input class="ie inp-pis"   type="number" step="0.1" value="${pis}" placeholder="${DOM.inpPis.value}"></td>
+      <td class="r"><input class="ie inp-taxa-row" type="number" step="0.0001" style="width:80px" value="${tx}" placeholder="${DOM.inpTaxa.value}"></td>
+      <td class="r td-highlight-liq">R$ ${formatBR(precoLiq)}</td>
+      <td class="r td-vl-liq-miro" style="color:var(--warn);font-weight:700;font-family:var(--mono)">R$ ${formatBR(vlLiqMiro)}</td>
+    </tr>`;
+  });
+  h += '</tbody></table>';
+  DOM.wrapEditor.innerHTML = h;
+
+  // Ao mudar Qtd Pedido Ã¢â â recalcula Fator automaticamente
+  DOM.wrapEditor.querySelectorAll('.inp-qtd-ped').forEach(inp => {
+    inp.addEventListener('change', function(){
+      const tr     = this.closest('tr');
+      const id     = parseInt(tr.dataset.id);
+      const ref    = AppState.data.find(d => d._id === id);
+      const qtdNfe = parseFloat(ref?.['Qtd']) || 1;
+      const qtdPed = parseFloat(this.value);
+      if(!qtdPed || qtdPed <= 0) return;
+      const novoFator = Math.round((qtdPed / qtdNfe) * 100000) / 100000;
+      tr.querySelector('.inp-fator').value = novoFator;
+      // Recalcula VL Liq MIRO com a nova Qtd Pedido
+      const precoLiq = parseFloat(
+        ref?.['Pre\u00e7o L\u00edq Total'] ?? ref?.['Preco Liq Total'] ?? 0
+      );
+      const novoVlLiqMiro = precoLiq * qtdPed;
+      const tdMiro = tr.querySelector('td.td-vl-liq-miro');
+      if(tdMiro) tdMiro.textContent = 'R$ ' + formatBR(novoVlLiqMiro);
+    });
+  });
+}
+
+/* 
+   RENDER COMPLETE TABLE
+ */
+function renderCompleteTable() {
+  const data = AppState.data;
+  if(!data.length){ DOM.wrapCompleta.innerHTML='<div class="empty"><div class="empty-icon">ð</div><p>Nenhum dado.</p></div>'; return; }
+  const gv = (r,...keys) => { for(const k of keys){ if(r[k]!==undefined && r[k]!==null) return r[k]; } return ''; };
+  const cols = [
+    { key:'NÂº NF',         alt:['NF','nNF','NFe','Numero NF'],  label:'NF',          type:'txt' },
+    { key:'Cód. Material', alt:['Cód Material','Cod Material','cProd','Cód. Material','Cód Material','Cãd Produto','Cód Produto','Cod Produto'], label:'Cód Produto', type:'txt' },
+    { key:'Descrição', alt:['Descrição','Descricao'], label:'Descrição', type:'txt' },
+    { key:'CFOP',          alt:[], label:'CFOP',        type:'txt' },
+    { key:'CST ICMS',      alt:[], label:'CST ICMS',    type:'txt' },
+    { key:'Qtd',           alt:[], label:'Qtd',         type:'num' },
+    { key:'Vl Unit',       alt:[], label:'Vl Unit',     type:'mon' },
+    { key:'Vl Produto',    alt:[], label:'Vl Produto',  type:'mon' },
+    { key:'% ICMS',        alt:[], label:'% ICMS',      type:'pct' },
+    { key:'BC ICMS',       alt:[], label:'BC ICMS',     type:'mon' },
+    { key:'Vl ICMS',       alt:[], label:'Vl ICMS',     type:'mon' },
+    { key:'% IPI',         alt:[], label:'% IPI',       type:'pct' },
+    { key:'BC IPI',        alt:[], label:'BC IPI',      type:'mon' },
+    { key:'Vl IPI',        alt:[], label:'Vl IPI',      type:'mon' },
+    { key:'% ICMS-ST',     alt:[], label:'% ICMS-ST',   type:'pct' },
+    { key:'BC ICMS-ST',    alt:[], label:'BC ICMS-ST',  type:'mon' },
+    { key:'Vl ICMS-ST',    alt:[], label:'Vl ICMS-ST',  type:'mon' },
+    { key:'% FCP-ST',      alt:[], label:'% FCP-ST',    type:'pct' },
+    { key:'BC FCP-ST',     alt:[], label:'BC FCP-ST',   type:'mon' },
+    { key:'Vl FCP-ST',     alt:[], label:'Vl FCP-ST',   type:'mon' },
+    { key:'% Red BC',      alt:[], label:'% Red BC',    type:'pct' },
+    { key:'Preço Líq PC',    alt:['Preço Líq PC','Preco Liq PC'],    label:'Preço Líq PC',    type:'mon' },
+    { key:'Preço Líq Total', alt:['Preço Líq Total','Preco Liq Total'], label:'Preço Líq Total', type:'mon' },
+    { key:'vNF', alt:['vNFTot', 'Vl Total Nota', 'Vl Total NF', 'Vl Nota'], label:'VL TOTAL NOTA', type:'mon' }
+  ];
+  let h = `<table class="dt"><thead><tr>${cols.map(c=>`<th>${c.label}</th>`).join('')}</tr></thead><tbody>`;
+  data.forEach(r => {
+    h += '<tr>'+cols.map(c => {
+      const v = gv(r, c.key, ...(c.alt||[]));
+      if(typeof v==='number'){
+        if(c.type==='mon') return `<td class="r money">R$ ${formatBR(v)}</td>`;
+        if(c.type==='pct') return `<td class="r">${formatBR(v)}%</td>`;
+        return `<td class="r">${formatBR(v)}</td>`;
+      }
+      return `<td>${v||''}</td>`;
+    }).join('')+'</tr>';
+  });
+  h += '</tbody></table>';
+  DOM.wrapCompleta.innerHTML = h;
+}
+
+/* 
+   PED ITEM EDITOR
+ */
+function renderPedItemEditor() {
+  const data = AppState.data;
+  if(data.length > 0) {
+    console.log("DIAGNOSTICO - Chaves do primeiro item:", Object.keys(data[0]));
+  }
+  let h = `<table class="dt"><thead><tr><th>NF</th><th>Cod. Material</th><th>Descricao</th><th>Ped-Item Original</th><th class="th-green">Ped-Item Corrigido</th></tr></thead><tbody>`;
+  data.forEach(r => {
+    const ped = r['Ped-Item']||'';
+    // Mapeamento agressivo para garantir que o sistema encontre os campos corretos
+    const nf = r['NÂº NF'] || r['NF'] || r['nNF'] || r['NFe'] || r['Número NF'] || r['Numero NF'] || r['Nota'] || r['nNF'] || '-';
+    const cod = r['Cód. Material'] || r['cProd'] || r['Cód Material'] || r['Cod Material'] || r['Cód. Material'] || r['Cód Material'] || r['Código'] || r['Cod.'] || '-';
+    const desc = r['Descrição'] ?? r['Descri\u00e7\u00e3o'] ?? r['Descricao'] ?? '';
+    h += `<tr data-id="${r._id}">
+      <td class="muted" style="font-weight:bold; color: #2c3e50;">${nf}</td>
+      <td class="muted" style="font-weight:bold; color: #2c3e50;">${cod}</td>
+      <td title="${desc}">${desc.substring(0,50)}${desc.length>50?'...':''}</td>
+      <td class="muted">${ped}</td>
+      <td><input class="ie inp-ped-item" type="text" value="${ped}" placeholder="PEDIDO-ITEM" style="width:150px"></td>
+    </tr>`;
+  });
+  h += '</tbody></table>';
+	  DOM.wrapPedItem.innerHTML = h;
+
+	  // Adiciona listener para persistir o valor digitado imediatamente no AppState
+	  DOM.wrapPedItem.querySelectorAll('.inp-ped-item').forEach(inp => {
+	    inp.addEventListener('input', function() {
+	      const tr = this.closest('tr');
+	      const id = parseInt(tr.dataset.id);
+	      const value = this.value.trim();
+	      const ref = AppState.data.find(d => d._id === id);
+	      if (ref) {
+	        ref['Ped-Item'] = value;
+	        // Garante cProd se estiver vazio
+	        if (!ref['cProd']) {
+	          const codTd = tr.querySelector('td:nth-child(2)');
+	          if (codTd && codTd.textContent !== '-') ref['cProd'] = codTd.textContent.trim();
+	        }
+	      }
+	      // Sincroniza também com o confrontoData se ele já existir
+	      if (AppState.confrontoData && AppState.confrontoData.length > 0) {
+	        const confRef = AppState.confrontoData.find(d => d._id === id);
+	        if (confRef) confRef['Ped-Item'] = value;
+	      }
+	    });
+	  });
+	}
+
+/* 
+   PROCV
+ */
+DOM.dropZoneProcv.addEventListener('dragover', e => { e.preventDefault(); DOM.dropZoneProcv.classList.add('over'); });
+DOM.dropZoneProcv.addEventListener('dragleave', () => DOM.dropZoneProcv.classList.remove('over'));
+DOM.dropZoneProcv.addEventListener('drop', e => { e.preventDefault(); DOM.dropZoneProcv.classList.remove('over'); if(e.dataTransfer.files.length) handleFileProcv(e.dataTransfer.files[0]); });
+DOM.dropZoneProcv.addEventListener('click', () => DOM.uploadProcv.click());
+DOM.uploadProcv.addEventListener('change', e => { if(e.target.files.length) handleFileProcv(e.target.files[0]); });
+
+async function handleFileProcv(file) {
+  const ok = /\.(xlsx|xls|csv)$/i.test(file.name);
+  if(!ok){ alert('Envie um arquivo Excel (.xlsx/.xls) ou CSV.'); return; }
+  AppState.fileProcv = file;
+  DOM.dropZoneProcv.querySelector('p').innerHTML = `<b>${file.name}</b> carregado.`;
+  const fd = new FormData(); fd.append('ref_file', file);
+  showLoading();
+  try {
+    const res = await fetch(`${API}/procv-preview`, { method:'POST', body:fd });
+    const json = await res.json();
+    if(!res.ok) throw new Error(json.detail||'Erro na pré-visualização');
+    [DOM.selRefChave, DOM.selRefPedido, DOM.selRefItem].forEach(s => s.innerHTML='');
+    DOM.selRefChave2.innerHTML = '<option value="">â Nenhum â</option>';
+    json.columns.forEach(c => {
+      [DOM.selRefChave, DOM.selRefChave2, DOM.selRefPedido, DOM.selRefItem].forEach(s => s.add(new Option(c,c)));
+    });
+    json.columns.forEach(c => {
+      const l = c.toLowerCase();
+      if(l.includes('codigo')||l.includes('material')) DOM.selRefChave.value = c;
+      if(l.includes('pedido')||l.includes('po'))        DOM.selRefPedido.value = c;
+      if(l.includes('item'))                             DOM.selRefItem.value = c;
+    });
+    DOM.procvControls.style.display = 'flex';
+    if(json.preview.length){
+      let h = `<table class="dt"><thead><tr>${json.columns.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+      json.preview.forEach(r => { h += '<tr>'+json.columns.map(c=>`<td>${r[c]||''}</td>`).join('')+'</tr>'; });
+      h += '</tbody></table>';
+      DOM.wrapProcvPreview.innerHTML = h;
+    } else { DOM.wrapProcvPreview.innerHTML = '<div class="empty"><p>Sem dados na referência.</p></div>'; }
+  } catch(e){ alert(e.message); }
+  finally{ hideLoading(); }
+}
+
+DOM.btnAplicarProcv.addEventListener('click', async () => {
+  if(!AppState.fileProcv) return;
+  if(!AppState.baseLoaded||!AppState.data.length){ alert('Nenhum XML carregado.'); return; }
+  const fd = new FormData();
+  fd.append('ref_file', AppState.fileProcv);
+  fd.append('data', JSON.stringify(AppState.data));
+  fd.append('col_chave',   DOM.selRefChave.value);
+  fd.append('col_chave_2', DOM.selRefChave2.value);
+  fd.append('col_pedido',  DOM.selRefPedido.value);
+  fd.append('col_item',    DOM.selRefItem.value);
+  fd.append('campo_xml',   DOM.selXmlField.value);
+  fd.append('campo_xml_2', DOM.selXmlField2.value);
+  showLoading();
+  try {
+    const res = await fetch(`${API}/procv-apply`, { method:'POST', body:fd });
+    const json = await res.json();
+    if(!res.ok) throw new Error(json.detail||'Erro ao aplicar PROCV');
+    AppState.data = json.data;
+    DOM.kpiProcv.classList.add('show');
+    DOM.kpiProcvEncontrados.textContent   = json.encontrados;
+    DOM.kpiProcvNaoEncontrados.textContent= json.nao_encontrados;
+    renderPedItemEditor();
+    alert(`PROCV aplicado: ${json.encontrados} encontrados, ${json.nao_encontrados} não encontrados.`);
+  } catch(e){ alert(e.message); }
+  finally{ hideLoading(); }
+});
+
+/* 
+   CONFRONTO PC
+ */
+DOM.dropZonePc.addEventListener('dragover', e => { e.preventDefault(); DOM.dropZonePc.classList.add('over'); });
+DOM.dropZonePc.addEventListener('dragleave', () => DOM.dropZonePc.classList.remove('over'));
+DOM.dropZonePc.addEventListener('drop', e => { e.preventDefault(); DOM.dropZonePc.classList.remove('over'); if(e.dataTransfer.files.length) handleFilesPc(e.dataTransfer.files); });
+DOM.dropZonePc.addEventListener('click', () => DOM.uploadPc.click());
+DOM.uploadPc.addEventListener('change', e => { if(e.target.files.length) handleFilesPc(e.target.files); });
+
+function handleFilesPc(files) {
+  const newFiles = Array.from(files).filter(f => /\.(xlsx|xls)$/i.test(f.name));
+  if(newFiles.length === 0){ alert('Envie arquivos Excel (.xlsx/.xls).'); return; }
+
+  // Acumula arquivos novos sem duplicar pelo nome
+  const existingNames = new Set(AppState.filesPc.map(f => f.name));
+  newFiles.forEach(f => { if(!existingNames.has(f.name)) AppState.filesPc.push(f); });
+
+  const nomes = AppState.filesPc.map(f => f.name).join(', ');
+  DOM.dropZonePc.querySelector('p').innerHTML = `<b>${AppState.filesPc.length} arquivo(s)</b> prontos: <small>${nomes}</small>`;
+  DOM.btnExecutarConfronto.disabled = false;
+  DOM.btnLimparPc.style.display = 'inline-flex';
+}
+
+DOM.btnLimparPc.addEventListener('click', () => {
+  AppState.filesPc = [];
+  DOM.uploadPc.value = '';
+  DOM.dropZonePc.querySelector('p').innerHTML = 'Upload Excel <b>Pedido de Compra</b>';
+  DOM.btnExecutarConfronto.disabled = true;
+  DOM.btnLimparPc.style.display = 'none';
+});
+
+DOM.btnExecutarConfronto.addEventListener('click', async () => {
+  if(!AppState.filesPc.length||!AppState.baseLoaded||!AppState.data.length){ alert('Carregue o XML e o PC primeiro.'); return; }
+  const trs = DOM.wrapPedItem.querySelectorAll('tbody tr');
+  trs.forEach(tr => {
+    const id = parseInt(tr.dataset.id);
+    const ref = AppState.data.find(d => d._id===id);
+    if(ref){ 
+      // Captura o valor do input, remove espaços em branco e garante que o campo Ped-Item exista
+      const rawValue = tr.querySelector('.inp-ped-item').value || '';
+      // Normalização Universal: remove espaços e garante formato PEDIDO-ITEM
+      let v = rawValue.trim();
+      
+      if (v.includes('-')) {
+        const parts = v.split('-').map(p => p.trim());
+        // Remove zeros Ã  esquerda do item (ex: 4503835367-010 vira 4503835367-10)
+        // Isso resolve conflitos quando o Excel do PC está como Número
+        const pedido = parts[0];
+        const item = parts[1].replace(/^0+/, '') || '0';
+        v = `${pedido}-${item}`;
+      }
+      
+      ref['Ped-Item'] = v; 
+      
+      // SINCRONIZAÃO ROBUSTA: O backend do confronto PC usa cProd e xProd como chaves secundárias.
+      // Vamos garantir que eles estejam preenchidos corretamente a partir da tabela.
+      const codTd = tr.querySelector('td:nth-child(2)');
+      const descTd = tr.querySelector('td:nth-child(3)');
+      
+      if (codTd && codTd.textContent !== '-') {
+        const cod = codTd.textContent.trim();
+        ref['cProd'] = cod;
+        ref['Cód. Material'] = cod;
+      }
+      if (descTd) {
+        const desc = descTd.getAttribute('title') || descTd.textContent.trim();
+        ref['Descricao'] = desc;
+        ref['Descrição'] = desc;
+        ref['xProd'] = desc;
+      }
+    }
+  });
+  const fd = new FormData();
+  // Envia como 'pc_file' (singular) para manter compatibilidade com o backend atual,
+  // mas o backend precisaria ser alterado para suportar múltiplos.
+  // Se o backend espera 'pc_file', enviamos apenas o primeiro ou alteramos para 'pc_file' múltiplo.
+  // Tentaremos enviar todos como 'pc_file' (o backend pode receber como lista se usar getlist)
+  AppState.filesPc.forEach(f => fd.append('pc_file', f));
+  
+  // LOG DE DEPURAÃO PARA ANALISAR O FORMATO DO PED-ITEM ENVIADO
+  console.log("DIAGNOSTICO - Enviando para confronto:", AppState.data.map(r => ({
+    id: r._id,
+    nf: r['NÂº NF'] || r['NF'],
+    cProd: r['cProd'] || r['Cód. Material'],
+    pedItem: r['Ped-Item']
+  })));
+  
+  fd.append('data', JSON.stringify(AppState.data));
+  showLoading();
+  DOM.btnExportConfronto.style.display='none';
+  try {
+    const res = await fetch(`${API}/confronto-pc`, { method:'POST', body:fd });
+    const json = await res.json();
+    if(!res.ok) {
+      console.error("Erro no confronto:", json);
+      const msg = typeof json.detail === 'object' ? JSON.stringify(json.detail) : (json.detail || json.message || 'Erro no confronto');
+      throw new Error(msg);
+    }
+    // Enriquece cada item do confrontoData com NÂº NF e Chave NF-e do item original
+    // usando _id como chave de ligação â garante que cada linha aponte para a NF correta
+    const originalMap = {};
+    AppState.data.forEach(r => { if(r._id) originalMap[r._id] = r; });
+    AppState.confrontoData = json.data.map(r => {
+      const orig = r._id ? originalMap[r._id] : null;
+      if(orig) {
+        r['NÂº NF']      = orig['NÂº NF']      || orig['NF'] || orig['nNF'] || '';
+        r['Chave NF-e'] = orig['Chave NF-e'] || orig['Chave'] || orig['chNFe'] || '';
+      }
+      return r;
+    });
+    DOM.kpiConfronto.classList.add('show');
+    DOM.kpiMatches.textContent  = json.kpis.matches;
+    DOM.kpiSemMatch.textContent = json.kpis.sem_match;
+    DOM.kpiDivVl.textContent    = json.kpis.div_vl;
+    DOM.kpiDivIcms.textContent  = json.kpis.div_icms;
+    DOM.kpiDivIpi.textContent   = json.kpis.div_ipi;
+    DOM.kpiDivNcm.textContent   = json.kpis.div_ncm;
+    DOM.kpiDivOrig.textContent  = json.kpis.div_orig;
+    // Contagem local para ICMS ST caso o backend não envie
+    const stCount = json.kpis.div_st !== undefined ? json.kpis.div_st : 
+                    json.data.filter(r => String(r['Status ICMS-ST'] || '').includes('DIVERGENTE')).length;
+    DOM.kpiDivSt.textContent    = stCount;
+    // Contagem local para RED BC
+    const redBcCount = json.data.filter(r => {
+      const xmlVal = parseFloat(r['pRedBC XML'] ?? r['% Red BC XML'] ?? r['Red BC XML'] ?? NaN);
+      const pcVal  = parseFloat(r['Aliq.Red.B.ICMS'] ?? r['Aliq Red B ICMS'] ?? r['Aliq. Red. B. ICMS'] ?? NaN);
+      if (isNaN(xmlVal) || isNaN(pcVal)) return false;
+      return Math.round((xmlVal + pcVal) * 100) / 100 !== 100.0;
+    }).length;
+    if (DOM.kpiDivRedBc) DOM.kpiDivRedBc.textContent = redBcCount;
+    AppState.currentFilter = 'all';
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter==='all'));
+    $('conf-filter').style.display='flex';
+    document.getElementById('btn-open-div-modal').style.display = 'inline-flex';
+    renderConfrontoTable();
+    DOM.btnExportConfronto.style.display='inline-flex';
+  } catch(e){ alert('Falha no confronto: '+e.message); }
+  finally{ hideLoading(); }
+});
+
+/* filter buttons */
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    AppState.currentFilter = btn.dataset.filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b===btn));
+    renderConfrontoTable();
+  });
+});
+
+DOM.wrapConfrontoRes.addEventListener('input', (e) => {
+  const input = e.target.closest('.inp-conf-ped-item');
+  if(!input) return;
+  
+  // Usa o dataset.idx para encontrar no confrontoData
+  const idx = parseInt(input.dataset.idx, 10);
+  const value = input.value.trim();
+  if(!Number.isNaN(idx) && AppState.confrontoData[idx]) {
+    AppState.confrontoData[idx]['Ped-Item'] = value;
+  }
+
+  // Usa o dataset.rowId para sincronizar com o AppState.data (base de tudo)
+  const rowId = parseInt(input.dataset.rowId, 10);
+  if(!Number.isNaN(rowId)){
+    const baseRow = AppState.data.find(d => d._id === rowId);
+    if(baseRow) {
+      baseRow['Ped-Item'] = value;
+      // Garante que o cProd esteja presente
+      if (!baseRow['cProd'] || baseRow['cProd'] === '-') {
+        const tr = input.closest('tr');
+        // No confronto a estrutura é diferente, mas o AppState.data deve ter o cProd original
+      }
+      // Atualiza também o editor de chaves se ele estiver aberto/renderizado
+      const editorInput = DOM.wrapPedItem.querySelector(`tr[data-id="${rowId}"] .inp-ped-item`);
+      if(editorInput) editorInput.value = value;
+    }
+  }
+});
+  // GERADOR DE RESUMO DE DIVERGENCIAS
+  window.generateDivSummary = function(statusKey, label) {
+    const defaultNfe = document.getElementById('div-nfe-input').value || '____';
+    const defaultChave = document.getElementById('div-chave-input').value || '____';
+    const numDiv = document.getElementById('div-numero-input').value || '____';
+    const data = AppState.confrontoData || [];
+    const divergentRows = data.filter(r => {
+      if (statusKey === 'RED BC') {
+        const xmlVal = parseFloat(r['pRedBC XML'] ?? r['% Red BC XML'] ?? r['Red BC XML'] ?? NaN);
+        const pcVal  = parseFloat(r['Aliq.Red.B.ICMS'] ?? r['Aliq Red B ICMS'] ?? r['Aliq. Red. B. ICMS'] ?? NaN);
+        if (isNaN(xmlVal) || isNaN(pcVal)) return false;
+        const soma = Math.round((xmlVal + pcVal) * 100) / 100;
+        return soma !== 100.0;
+      }
+      return String(r[statusKey] || '').includes('DIVERGENTE');
+    });
+    
+    if (divergentRows.length === 0) {
+      document.getElementById('div-summary-output').value = `Nenhuma divergência de ${label} encontrada.`;
+      return;
+    }
+
+    let finalResult = '';
+    const limitTabela = (label === 'ORIGEM') ? 7 : (label === 'NCM' ? 6 : 999);
+
+    if (label === 'NCM' || label === 'ORIGEM') {
+      // NOVA LÓGICA CONSOLIDADA (Apenas para NCM e ORIGEM)
+      const rows = divergentRows;
+      const nfList = Array.from(new Set(rows.map(r => r['NÂº NF'] || r['NF'] || r['nNF'] || defaultNfe))).join('/');
+      const chaveList = Array.from(new Set(rows.map(r => r['Chave NF-e'] || r['Chave'] || defaultChave))).join(' / ');
+
+      if (rows.length > limitTabela) {
+        // FORMATO TABELA TABULADA (para Excel)
+        const tableLines = rows.map(r => {
+          const pedItem = String(r['Ped-Item'] || '');
+          const [ped, linha] = pedItem.split('-');
+          const chave = r['Chave NF-e'] || r['Chave'] || defaultChave;
+          let xmlVal = '';
+          if (label === 'NCM') {
+            const rawNcm = String(r['NCM XML'] || '').replace(/\D/g, '');
+            xmlVal = rawNcm.length === 8 ? `${rawNcm.substring(0,4)}.${rawNcm.substring(4,6)}.${rawNcm.substring(6,8)}` : (rawNcm || '-');
+          } else {
+            xmlVal = r['Origem XML'] || r['Orig XML'] || '-';
+          }
+          // Formato: NumDiv [TAB] Pedido [TAB] Linha [TAB] Valor [TAB] Chave
+          return `${numDiv}\t${ped || '?'}\t${linha || '?'}\t${xmlVal}\t${chave}`;
+        });
+        finalResult = tableLines.join('\n');
+      } else {
+        // FORMATO TEXTO PADRÃO
+        const items = rows.map(r => {
+          const pedItem = String(r['Ped-Item'] || '');
+          const [ped, linha] = pedItem.split('-');
+          let xmlVal = '';
+          if (label === 'NCM') {
+            const rawNcm = String(r['NCM XML'] || '').replace(/\D/g, '');
+            xmlVal = rawNcm.length === 8 ? `${rawNcm.substring(0,4)}.${rawNcm.substring(4,6)}.${rawNcm.substring(6,8)}` : (rawNcm || '-');
+          } else {
+            xmlVal = r['Origem XML'] || r['Orig XML'] || '-';
+          }
+          return `Ped:${ped || '?'} Linha:${linha || '?'} ${label}:${xmlVal}`;
+        });
+        finalResult = items.join(' ') + ` - Nfe:${nfList}`;
+      }
+    } else {
+      // LÓGICA ORIGINAL (Separada por Nota Fiscal) para PREÇO, ICMS, IPI, ST, RED BC
+      const groupedByNF = {};
+      divergentRows.forEach(r => {
+        const chave = r['Chave NF-e'] || r['Chave'] || defaultChave;
+        const nfe = r['NÂº NF'] || r['NF'] || r['nNF'] || defaultNfe;
+        const nfKey = `${nfe}|${chave}`;
+        if (!groupedByNF[nfKey]) groupedByNF[nfKey] = [];
+        groupedByNF[nfKey].push(r);
+      });
+
+      const allNFBlocks = [];
+      Object.keys(groupedByNF).forEach(nfKey => {
+        const [nfe, chave] = nfKey.split('|');
+        const rows = groupedByNF[nfKey];
+        let nfBlock = '';
+
+        if (label === 'PREÇO') {
+          const groupedByPed = {};
+          rows.forEach(r => {
+            const pedItem = String(r['Ped-Item'] || '');
+            const [ped, linha] = pedItem.split('-');
+            if (!groupedByPed[ped]) groupedByPed[ped] = [];
+            groupedByPed[ped].push(linha);
+          });
+          const blocks = Object.keys(groupedByPed).map(ped => {
+            const linhas = groupedByPed[ped].join('/');
+            return `Verificar preço liquido do pedido ${ped}, linhas ${linhas}, conforme chave de acesso NFE ${chave}. Obs.: IVA, NCM e Origem verificados`;
+          });
+          nfBlock = blocks.join('\n\n');
+        } else if (label === 'ICMS' || label === 'IPI' || label === 'ICMS ST' || label === 'RED BC') {
+          const blocks = [];
+          const grouped = [];
+          rows.forEach(r => {
+            const pedItem = String(r['Ped-Item'] || '');
+            const [ped, linha] = pedItem.split('-');
+            let xmlVal, pcVal;
+            if (label === 'ICMS') {
+              xmlVal = (r['ICMS XML (%)'] ?? 0) + '%';
+              pcVal  = (r['ICMS PC (%)']  ?? 0) + '%';
+            } else if (label === 'IPI') {
+              xmlVal = (r['IPI XML (%)'] ?? 0) + '%';
+              pcVal  = (r['IPI PC (%)']  ?? 0) + '%';
+            } else if (label === 'ICMS ST') {
+              xmlVal = (r['ICMS-ST XML (%)'] ?? 0) + '%';
+              pcVal  = (r['ICMS-ST PC (%)']  ?? 0) + '%';
+            } else if (label === 'RED BC') {
+              xmlVal = (r['pRedBC XML'] ?? r['% Red BC XML'] ?? r['Red BC XML'] ?? 0) + '%';
+              pcVal  = (r['Aliq.Red.B.ICMS'] ?? r['Aliq Red B ICMS'] ?? r['Aliq. Red. B. ICMS'] ?? 0) + '%';
+            }
+            const existing = grouped.find(g => g.ped === ped && g.xmlVal === xmlVal && g.pcVal === pcVal);
+            if (existing) existing.linhas.push(linha || '?');
+            else grouped.push({ ped: ped || '?', xmlVal, pcVal, linhas: [linha || '?'] });
+          });
+          grouped.forEach(g => {
+            blocks.push(`Ped:${g.ped} Linha:${g.linhas.join('/')} ${label} PC: ${g.pcVal}; Diverge do ${label} Nota Fiscal: ${g.xmlVal} - Chave NFe ${chave} Obs.: IVA, NCM e Origem verificados`);
+          });
+          nfBlock = blocks.join('\n\n');
+        } else {
+          let currentItems = [];
+          rows.forEach((r, idx) => {
+            const pedItem = String(r['Ped-Item'] || '');
+            const [ped, linha] = pedItem.split('-');
+            currentItems.push(`Ped:${ped || '?'} Linha:${linha || '?'}`);
+            if (idx === rows.length - 1) {
+              nfBlock = currentItems.join('; ') + ` - Nfe:${nfe}`;
+            }
+          });
+        }
+        allNFBlocks.push(nfBlock);
+      });
+      finalResult = allNFBlocks.join('\n\n' + '='.repeat(30) + '\n\n');
+    }
+
+    document.getElementById('div-summary-output').value = finalResult;
+    // Ajusta altura do textarea para ver todos os blocos se houver quebra
+    const textarea = document.getElementById('div-summary-output');
+    textarea.style.height = 'auto';
+    textarea.style.height = (textarea.scrollHeight + 10) + 'px';
+  };
+
+  window.copyDivSummary = function() {
+    const copyText = document.getElementById('div-summary-output');
+    if (!copyText.value || copyText.value.startsWith('Selecione') || copyText.value.startsWith('Nenhuma')) return;
+    
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(copyText.value);
+    
+    const btn = document.getElementById('btn-copy-summary');
+    const originalText = btn.innerText;
+    btn.innerText = 'Copiado!';
+    setTimeout(() => btn.innerText = originalText, 2000);
+  };
+  document.getElementById('btn-copy-summary').onclick = window.copyDivSummary;
+
+  window.openDivModal = () => document.getElementById('div-modal').classList.add('show');
+  window.closeDivModal = () => document.getElementById('div-modal').classList.remove('show');
+  document.getElementById('btn-open-div-modal').onclick = window.openDivModal;
+  
+  // Close modal on escape key
+  window.addEventListener('keydown', (e) => { if(e.key === 'Escape') window.closeDivModal(); });
+  // Close modal on outside click
+  document.getElementById('div-modal').onclick = (e) => { if(e.target === document.getElementById('div-modal')) window.closeDivModal(); };
+
+  function renderConfrontoTable() {
+  let data = AppState.confrontoData;
+  if(AppState.currentFilter==='div') data = data.filter(r => {
+    const stdStatuses = [r['Status Dif.'],r['Status ICMS'],r['Status IPI'],r['Status ICMS-ST'],r['Status NCM'],r['Status Origem']].some(s => String(s||'').includes('DIVERGENTE'));
+    
+    // Se Status Dif for OK ou TOL, não é divergência de preço
+    const isPriceDiv = String(r['Status Dif.']||'').includes('DIVERGENTE');
+    const otherDivs = [r['Status ICMS'],r['Status IPI'],r['Status ICMS-ST'],r['Status NCM'],r['Status Origem']].some(s => String(s||'').includes('DIVERGENTE'));
+
+    if (isPriceDiv || otherDivs) return true;
+    // Verifica Red.BC localmente
+    const xmlVal = parseFloat(r['pRedBC XML'] ?? r['% Red BC XML'] ?? r['Red BC XML'] ?? NaN);
+    const pcVal  = parseFloat(r['Aliq.Red.B.ICMS'] ?? r['Aliq Red B ICMS'] ?? r['Aliq. Red. B. ICMS'] ?? NaN);
+    if (!isNaN(xmlVal) && !isNaN(pcVal)) {
+      // Regra: RedXML + RedPC deve ser 100 (arredondado para 2 casas)
+      const soma = Math.round((xmlVal + pcVal) * 100) / 100;
+      return soma !== 100.0;
+    }
+    return false;
+  });
+  if(AppState.currentFilter==='nm') data = data.filter(r => !r['Encontrado']);
+
+  const badge = (val) => {
+    const s = String(val||'');
+    if(s.includes('OK'))         return `<span class="badge ok">OK</span>`;
+    if(s.includes('TOL'))        return `<span class="badge warn">TOL</span>`;
+    if(s.includes('SEM MATCH'))  return `<span class="badge nm">sem match</span>`;
+    if(s.includes('DIVERGENTE')) return `<span class="badge bad">DIV</span>`;
+    return `<span class="badge nm">-</span>`;
+  };
+
+  let h = `<table class="dt"><thead><tr>
+    <th>NF</th><th>Descricao</th><th>Ped-Item</th>
+    <th class="r">R$ XML</th><th class="r">R$ PC</th><th class="r">Dif R$</th><th>Dif</th>
+    <th class="r">ICMS XML%</th><th class="r">ICMS PC%</th><th>Status</th>
+    <th class="r">IPI XML%</th><th class="r">IPI PC%</th><th>Status</th>
+    <th class="r">ST XML%</th><th class="r">ST PC%</th><th>Status</th>
+    <th>NCM XML</th><th>NCM PC</th><th>Status</th>
+    <th>Orig XML</th><th>Orig PC</th><th>Status</th>
+    <th class="r">Red.BC XML%</th><th class="r">Aliq.Red.B.ICMS</th><th>Status</th>
+  </tr></thead><tbody>`;
+
+  data.forEach(r => {
+    const stDif = String(r['Status Dif.']||'');
+    const difColor = stDif.includes('OK') ? 'green' : stDif.includes('TOL') ? 'yellow' : 'red';
+    const dif = r['Dif. Vl Unit'];
+    // Compatibilidade: chave pode vir com acento correto ou corrompido por encoding
+    const vlPcXML = r['Preço Líq Total (XML)'] ?? r['Preço Líq Total (XML)'] ?? r['Pre\u00e7o L\u00edq Total (XML)'];
+    const vlLiqUnitPC = r['Vl Líq Unit PC'] ?? r['Vl L\u00edq Unit PC'] ?? r['Vl Liq Unit PC'];
+    const descricao = r['Descrição'] ?? r['Descri\u00e7\u00e3o'] ?? r['Descricao'] ?? '';
+
+    // Verifica divergência RED BC para destaque da linha
+    const _pRedBcXmlRaw = r['pRedBC XML'] ?? r['% Red BC XML'] ?? r['Red BC XML'] ?? null;
+    const _aliqRedPcRaw = r['Aliq.Red.B.ICMS'] ?? r['Aliq Red B ICMS'] ?? r['Aliq. Red. B. ICMS'] ?? null;
+    const _xmlRedVal = _pRedBcXmlRaw !== null ? parseFloat(_pRedBcXmlRaw) : null;
+    const _pcRedVal  = _aliqRedPcRaw !== null ? parseFloat(_aliqRedPcRaw) : null;
+    const isDivRedBc = (_xmlRedVal !== null && _pcRedVal !== null)
+      ? Math.round((_xmlRedVal + _pcRedVal) * 100) / 100 !== 100.0
+      : false;
+
+    const rowStyle = isDivRedBc
+      ? ' style="background:rgba(246,106,106,.10);border-left:3px solid rgba(246,106,106,.75);"'
+      : '';
+
+    const nfNum = r['NÂº NF'] || r['NF'] || r['nNF'] || '-';
+    h += `<tr${rowStyle}>
+      <td>${nfNum}</td>
+      <td title="${descricao}">${isDivRedBc ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-right:5px;vertical-align:middle;box-shadow:0 0 5px rgba(246,106,106,.7)"></span>` : ''}${descricao.substring(0,28)}...</td>
+      <td><input class="ie inp-conf-ped-item" type="text" style="width:140px" data-idx="${AppState.confrontoData.indexOf(r)}" data-row-id="${r._id||''}" value="${r['Ped-Item']||''}" placeholder="PEDIDO-ITEM"></td>
+      <td class="r money">R$ ${formatBR(vlPcXML)}</td>
+      <td class="r">${vlLiqUnitPC!=null?'R$ '+formatBR(vlLiqUnitPC):'-'}</td>
+      <td class="r ${difColor}">${dif!=null?formatBR(dif):'-'}</td>
+      <td>${badge(r['Status Dif.'])}</td>
+      <td class="r">${r['ICMS XML (%)']!=null?r['ICMS XML (%)']+'%':'-'}</td>
+      <td class="r">${r['ICMS PC (%)'] !=null?r['ICMS PC (%)']+'%' :'-'}</td>
+      <td>${badge(r['Status ICMS'])}</td>
+      <td class="r">${r['IPI XML (%)'] !=null?r['IPI XML (%)']+'%' :'-'}</td>
+      <td class="r">${r['IPI PC (%)']  !=null?r['IPI PC (%)']+'%'  :'-'}</td>
+      <td>${badge(r['Status IPI'])}</td>
+      <td class="r">${r['ICMS-ST XML (%)'] !=null?r['ICMS-ST XML (%)']+'%':'0%'}</td>
+      <td class="r">${r['ICMS-ST PC (%)']  !=null?r['ICMS-ST PC (%)']+'%':'0%'}</td>
+      <td>${badge(r['Status ICMS-ST'])}</td>
+      <td>${r['NCM XML']||'-'}</td><td>${r['NCM PC']||'-'}</td>
+      <td>${badge(r['Status NCM'])}</td>
+      <td>${r['Origem XML'] ?? r['Orig XML'] ?? r['Orig'] ?? '-'}</td>
+      <td>${r['Origem PC'] ?? r['Orig PC'] ?? '-'}</td>
+      <td>${badge(r['Status Origem'] ?? r['Status Orig'] ?? '-')}</td>
+      ${(() => {
+        const pRedBcXml = r['pRedBC XML'] ?? r['% Red BC XML'] ?? r['Red BC XML'] ?? null;
+        const aliqRedPc = r['Aliq.Red.B.ICMS'] ?? r['Aliq Red B ICMS'] ?? r['Aliq. Red. B. ICMS'] ?? null;
+        const xmlVal = pRedBcXml !== null ? parseFloat(pRedBcXml) : null;
+        const pcVal  = aliqRedPc !== null ? parseFloat(aliqRedPc) : null;
+        let statusHtml = `<span class="badge nm">-</span>`;
+        if (xmlVal !== null && pcVal !== null) {
+          // Regra: RedXML + RedPC deve ser 100 (arredondado para 2 casas)
+          const soma = Math.round((xmlVal + pcVal) * 100) / 100;
+          const ok = (soma === 100.0);
+          statusHtml = ok ? `<span class="badge ok">OK</span>` : `<span class="badge bad">DIV</span>`;
+        }
+        return `<td class="r">${xmlVal !== null ? xmlVal + '%' : '-'}</td>
+      <td class="r">${pcVal !== null ? pcVal + '%' : '-'}</td>
+      <td>${statusHtml}</td>`;
+      })()}
+    </tr>`;
+  });
+  h += '</tbody></table>';
+  DOM.wrapConfrontoRes.innerHTML = h;
+}
+
+/* 
+   EXPORT EXCEL
+ */
+DOM.btnExport.addEventListener('click', async () => {
+  if(!AppState.baseLoaded) return;
+  const payload = { data:AppState.data, pis_rate:parseFloat(DOM.inpPis.value)||0, taxa_efetiva:parseFloat(DOM.inpTaxa.value)||1, tipo_global:DOM.selTipo.value };
+  DOM.btnExport.textContent = 'Exportando...';
+  try {
+    const res = await fetch(`${API}/export-excel`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Erro no servidor');
+    }
+    const blob = await res.blob();
+    const a = Object.assign(document.createElement('a'), { href:URL.createObjectURL(blob), download:'relatorio_icms.xlsx', style:'display:none' });
+    document.body.append(a); a.click(); setTimeout(()=>{ a.remove(); URL.revokeObjectURL(a.href); },500);
+  } catch(e){ 
+    console.error(e);
+    alert('Erro ao exportar: ' + e.message); 
+  }
+  finally{ DOM.btnExport.textContent='Exportar Excel'; }
+});
+
+DOM.btnExportConfronto.addEventListener('click', async () => {
+  if(!AppState.confrontoData.length) return;
+  DOM.btnExportConfronto.textContent='Exportando...';
+  try {
+    const res = await fetch(`${API}/export-confronto`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({data:AppState.confrontoData}) });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Erro no servidor');
+    }
+    const blob = await res.blob();
+    const a = Object.assign(document.createElement('a'), { href:URL.createObjectURL(blob), download:'confronto_pc.xlsx', style:'display:none' });
+    document.body.append(a); a.click(); setTimeout(()=>{ a.remove(); URL.revokeObjectURL(a.href); },500);
+  } catch(e){ 
+    console.error(e);
+    alert('Erro ao exportar: ' + e.message); 
+  }
+  finally{ DOM.btnExportConfronto.textContent='Exportar Excel'; }
+});
+
+/* Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬
+   CALCULADORA UNITÂRIA
+   Replica exatamente a lógica de calcular_linha() do backend
+   Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬ */
+(function(){
+  const $cu = id => document.getElementById(id);
+
+  function norm(v){
+    v = parseFloat(v)||0;
+    return v > 1 ? v/100 : v;
+  }
+
+  function calcUnit(){
+    const tipo   = $cu('cu-tipo').value;
+    const vUnit  = parseFloat($cu('cu-preco').value)||0;
+    const qtd    = parseFloat($cu('cu-qtd').value)||1;
+    const pICMS  = norm($cu('cu-icms').value);
+    const pIPI   = norm($cu('cu-ipi').value);
+    const pPis   = norm($cu('cu-pis').value);
+    const pRedBC = norm($cu('cu-redbc').value);
+    const taxa   = parseFloat($cu('cu-taxa').value)||1;
+    const mult   = parseFloat($cu('cu-mult').value)||1;
+    const fator  = parseFloat($cu('cu-fator').value)||1;
+    const outras = parseFloat($cu('cu-outras').value)||0;   // Outras Despesas â soma no BC ICMS
+    const precoPc  = parseFloat($cu('cu-pc').value)||0;
+    const tolPct   = parseFloat($cu('cu-tol').value)||15;
+
+    const vUnit_ped  = vUnit / fator;
+    const qtd_ped    = qtd * fator;
+    const pICMS_ef   = pICMS * (1 - pRedBC);
+
+    // Totais para os cards
+    const totalProd    = vUnit_ped * qtd_ped;
+    const totalProdIPI = tipo === 'Ativo/Consumo' ? totalProd * (1 + pIPI) : totalProd;
+
+    // (-) ICMS card  = BC ICMS (total) * pICMS_ef
+    // (-) PIS card   = Total do Produto (sem IPI) * pPis
+    // (-) IPI card   = Total do Produto * pIPI
+    const vICMS_total = (totalProdIPI + outras) * pICMS_ef;
+    const vPis_total  = totalProd    * pPis;
+    const vIPI_total  = totalProd    * pIPI;
+
+    let BC, vIPI_val, vICMS_val, vPis_val, conversao;
+
+    // outras_unit: distribui Outras Despesas proporcionalmente por unidade de pedido
+    const outras_unit = qtd_ped > 0 ? outras / qtd_ped : 0;
+
+    if(tipo === 'Ativo/Consumo'){
+      BC        = vUnit_ped * (1 + pIPI) + outras_unit;  // (+) Outras Despesas no BC
+      vIPI_val  = vUnit_ped * pIPI;
+      vICMS_val = BC * pICMS_ef;          // unitario para detalhamento
+      vPis_val  = vUnit_ped * pPis;       // s/ Total do Produto (sem IPI), unitario
+      conversao = (vUnit_ped + outras_unit) - vICMS_val - vPis_val;
+    } else {
+      BC        = vUnit_ped + outras_unit;  // (+) Outras Despesas no BC
+      vIPI_val  = 0;
+      vICMS_val = BC * pICMS_ef;
+      vPis_val  = BC * pPis;
+      conversao = BC - vICMS_val - vPis_val;
+    }
+
+    const precoLiq   = conversao / taxa;
+    const precoTotal = precoLiq * mult;
+    const vUnitBRL   = vUnit / taxa;
+
+    const fmt = (v, dec=2) => {
+      if(v===null||v===undefined||isNaN(v)) return '-';
+      return new Intl.NumberFormat('pt-BR',{minimumFractionDigits:dec,maximumFractionDigits:dec}).format(v);
+    };
+    const fmtPct = v => fmt(v*100, v*100 % 1 === 0 ? 0 : 4) + '%';
+
+    const steps = tipo === 'Ativo/Consumo' ? [
+      {label:'Preco Unit. / Fator Conv.',  val:vUnit_ped,   unit:'R$', note:`${fmt(vUnit)} / ${fator}`},
+      {label:'x (1 + % IPI)',              val:vUnit_ped*(1+pIPI), unit:'R$', note:`vUnit_ped x (1 + ${fmtPct(pIPI)})`},
+      ...(outras>0?[{label:'(+) Outras Despesas (unit.)', val:outras_unit, unit:'R$', note:`${fmt(outras)} / ${qtd_ped} un.`}]:[]),
+      {label:'= BC ICMS',                  val:BC,          unit:'R$', note: outras>0 ? 'vUnit*(1+IPI) + Outras' : `vUnit_ped x (1 + ${fmtPct(pIPI)})`},
+      {label:'(-) ICMS',                   val:vICMS_val,   unit:'R$', note:`${fmtPct(pICMS_ef)} s/ BC unit.${pRedBC>0?' (red.'+fmtPct(pRedBC)+')':''}`},
+      {label:'(-) PIS+COFINS',             val:vPis_val,    unit:'R$', note:`${fmtPct(pPis)} s/ vUnit_ped (s/ IPI)`},
+      {label:'(-) IPI',                    val:vIPI_val,    unit:'R$', note:`${fmtPct(pIPI)} s/ vUnit_ped`},
+      {label:'= Conversao (liquido)',       val:conversao,   unit:'R$', note:'BC - ICMS - PIS+COF - IPI', highlight:true},
+      {label:'/ Taxa de Cambio',            val:taxa,        unit:'/',  note:''},
+      {label:'Preco Liq. Unitario',         val:precoLiq,    unit:'R$', note:'', highlight:true},
+      {label:'x Multiplicador',             val:mult,        unit:'x',  note:''},
+      {label:'Preco Liq. Total',            val:precoTotal,  unit:'R$', note:'', highlight:true},
+    ] : [
+      {label:'Preco Unit. / Fator Conv.',  val:vUnit_ped,   unit:'R$', note:`${fmt(vUnit)} / ${fator}`},
+      ...(outras>0?[{label:'(+) Outras Despesas (unit.)', val:outras_unit, unit:'R$', note:`${fmt(outras)} / ${qtd_ped} un.`}]:[]),
+      {label:'= BC ICMS',                  val:BC,          unit:'R$', note: outras>0 ? 'vUnit_ped + Outras' : 'IPI nao entra em PA/Insumo'},
+      {label:'(-) ICMS',                   val:vICMS_val,   unit:'R$', note:`${fmtPct(pICMS_ef)} s/ BC${pRedBC>0?' (red.'+fmtPct(pRedBC)+')':''}`},
+      {label:'(-) PIS+COFINS',             val:vPis_val,    unit:'R$', note:`${fmtPct(pPis)} s/ BC (Total do Produto)`},
+      {label:'= Conversao (liquido)',       val:conversao,   unit:'R$', note:'BC - ICMS - PIS+COF', highlight:true},
+      {label:'/ Taxa de Cambio',            val:taxa,        unit:'/',  note:''},
+      {label:'Preco Liq. Unitario',         val:precoLiq,    unit:'R$', note:'', highlight:true},
+      {label:'x Multiplicador',             val:mult,        unit:'x',  note:''},
+      {label:'Preco Liq. Total',            val:precoTotal,  unit:'R$', note:'', highlight:true},
+    ];
+
+    const kpis = [
+      {label:'Preco Liq. Unit.',  val:'R$ '+fmt(precoTotal),                       cls:'p', highlight:true},
+      {label:'Total do Produto',  val:'R$ '+fmt(totalProd),                        cls:''},
+      {label:'BC ICMS',           val:'R$ '+fmt(totalProdIPI + outras),                cls:''},
+      {label:'VL ICMS',           val:'R$ '+fmt(vICMS_total),                          cls:''},
+      {label:'VL IPI',             val:'R$ '+(pIPI > 0 ? fmt(totalProd * pIPI) : fmt(0)), cls:''},
+    ];
+
+    let h = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px">
+        ${kpis.map(k=>`
+          <div class="kpi ${k.cls}" style="padding:12px 14px${k.highlight ? ';border-color:var(--hk-green-400);box-shadow:0 0 0 2px rgba(44,207,102,.25),var(--shadow-soft)' : ''}">
+            <div class="kpi-label" style="${k.highlight ? 'color:var(--hk-green-200)' : ''}">${k.label}</div>
+            <div class="kpi-val" style="font-size:16px${k.highlight ? ';color:var(--ok)' : ''}">${k.val}</div>
+          </div>`).join('')}
+      </div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--txt-3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">
+        Detalhamento · Tipo: <span style="color:var(--hk-green-200)">${tipo}</span>
+      </div>
+      ${(() => {
+        if(!precoPc) return '';
+        
+        // No SAP, a validação compara o Valor Bruto da NF-e com o Valor Líquido Calculado
+        const totalNFe       = vUnit * qtd;         // Valor Bruto da Nota (vProd)
+        
+        // No SAP, a validação de tolerÃ¢ncia (R$ 300) compara o Valor Bruto da NF-e com o "Bruto Calculado" do PC
+        // Bruto Calculado = (Preço PC Líquido / (1 - %Impostos)) * Qtd
+        // No seu cenário: (2009,84 / 1000) / (1 - 0,2725) * 25440 â 70.282,24
+        
+        const somaAliqRecup  = pICMS_ef + pPis; // Ex: 18% + 9,25% = 27,25%
+        const divisor        = (1 - somaAliqRecup);
+        
+        // No SAP, se houver Taxa de CÃ¢mbio, o Preço do PC é multiplicado por ela para bater com a moeda da nota
+        // Bruto Calculado = ((Preço PC * Taxa de CÃ¢mbio) / Multiplicador) / (1 - %Impostos) * Qtd
+        
+        // Preço PC Bruto Unitário (ajustado por Taxa e Multiplicador)
+        const precoPcBruto   = divisor > 0 ? ((precoPc * taxa) / mult) / divisor : ((precoPc * taxa) / mult);
+        
+        const totalCalculado = precoPcBruto * qtd;  // Valor Bruto Calculado do PC pelo SAP
+        
+        const difTotal       = totalNFe - totalCalculado;
+        const absDifTotal    = Math.abs(difTotal);
+        
+        // A tolerÃ¢ncia de R$ 300,00 e 15% é aplicada sobre o valor calculado (padrão SAP)
+        const limPctTotal    = Math.abs(totalCalculado) * (tolPct / 100);
+        const limTolTotal    = Math.min(limPctTotal, 300); // Teto de R$ 300,00
+        
+        const dentro         = absDifTotal <= (limTolTotal + 0.001);
+        
+        const cor            = dentro ? 'var(--ok)' : 'var(--bad)';
+        const bgCor          = dentro ? 'rgba(44,207,102,.08)' : 'rgba(246,106,106,.08)';
+        const borderCor      = dentro ? 'rgba(44,207,102,.3)'  : 'rgba(246,106,106,.3)';
+        
+        let msgBadge = dentro ? 'â DENTRO DA TOLERNCIA' : 'â FORA DA TOLERNCIA';
+        if (!dentro) {
+          if (absDifTotal > 300 && absDifTotal <= limPctTotal) {
+            msgBadge = 'â FORA DA TOLERNCIA (> R$ 300,00)';
+          } else if (absDifTotal > limPctTotal) {
+            msgBadge = 'â FORA DA TOLERNCIA (> ' + fmt(tolPct,2) + '%)';
+          }
+        }
+        
+        const badge = `<span style="background:${dentro ? 'rgba(44,207,102,.15)' : 'rgba(246,106,106,.15)'};color:${cor};border:1px solid ${borderCor};border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700">${msgBadge}</span>`;
+        
+        return `
+          <div style="border:1px solid ${borderCor};background:${bgCor};border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+            <div>
+              <div style="font-size:10px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Validação SAP (Total Item)</div>
+              ${badge}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:20px;font-family:var(--mono);font-size:12px">
+              <div><span style="color:var(--txt-3)">Nota Fiscal (Total): </span><span style="color:var(--txt-1);font-weight:600">R$ ${fmt(totalNFe)}</span></div>
+              <div><span style="color:var(--txt-3)">Valor Calculado (Total): </span><span style="color:var(--txt-1);font-weight:600">R$ ${fmt(totalCalculado)}</span></div>
+              <div><span style="color:var(--txt-3)">Diferença (Total): </span><span style="color:${cor};font-weight:600">${difTotal >= 0 ? '+' : ''}R$ ${fmt(difTotal)}</span></div>
+              <div><span style="color:var(--txt-3)">Lim. TolerÃ¢ncia: </span><span style="color:var(--txt-1);font-weight:600">R$ ${fmt(limTolTotal)} (Â±${fmt(tolPct,2)}%)</span></div>
+            </div>
+          </div>`;
+      })()}
+      <table class="dt" style="max-width:680px">
+        <thead><tr><th>Etapa</th><th class="r">Valor</th><th class="r">Un.</th><th>Obs.</th></tr></thead>
+        <tbody>
+          ${steps.map(s=>`
+            <tr${s.highlight?' style="background:rgba(44,207,102,.1)"':''}>
+              <td${s.highlight?' style="color:var(--hk-green-200);font-weight:700"':''}>${s.label}</td>
+              <td class="r${s.highlight?' money':''}">${s.unit==='R$' ? 'R$ '+fmt(s.val) : fmt(s.val,6)}</td>
+              <td class="r muted">${s.unit}</td>
+              <td class="muted">${s.note}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+
+    $cu('cu-result-wrap').innerHTML = h;
+  }
+
+    function clearUnit(){
+    ['cu-preco','cu-qtd','cu-icms','cu-ipi','cu-redbc','cu-pc','cu-outras'].forEach(id => { const el = $cu(id); if(el) el.value=''; });
+    $cu('cu-pis').value  = '9.25';
+    $cu('cu-taxa').value = '1.0000';
+    $cu('cu-mult').value = '1';
+    $cu('cu-fator').value= '1';
+    $cu('cu-tol').value  = '15';
+    $cu('cu-result-wrap').innerHTML = `
+      <div class="empty" style="height:120px">
+        <div class="empty-icon" style="font-size:28px">&#8776;</div>
+        <p>Preencha os campos e clique em Calcular.</p>
+      </div>`;
+  }
+
+  document.getElementById('cu-btn-calc').addEventListener('click', calcUnit);
+  document.getElementById('cu-btn-clear').addEventListener('click', clearUnit);
+
+  // Recalcula ao pressionar Enter em qualquer input da calculadora
+  document.querySelectorAll('#panel-calc-unit input').forEach(inp => {
+    inp.addEventListener('keydown', e => { if(e.key==='Enter') calcUnit(); });
+  });
+})();
+
+  /* ==============================================================================
+     DIVERGÊNCIAS PADRÃO (Excel TrabalhoManus.xlsm)
+     ============================================================================== */
+  (function(){
+    const $dp = id => document.getElementById(id);
+    
+    // Dados fixos do App
+    const defaultOptions = [
+      { id: "CANCEL", label: "CANCELAMENTO DIVERGÊNCIA", template: "Solicito o cancelamento da divergência do pedido {pedido}, conforme chave de acesso NFE {chave_nfe}. Motivo: {motivo}." },
+      { id: "001", label: "001 - CNPJ DIVERGENTE PC", template: "Verificar CNPJ divergente do pedido {pedido}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "002", label: "002 - QTDE MAIOR QUE O PC", template: "Verificar quantidade maior que o pedido {pedido}, linhas {linhas}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "003", label: "003 - PREÇO DIVERGENTE PC", template: "Verificar preço divergente do pedido {pedido}, linhas {linhas}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "004", label: "004 - INCOTERMS DIVERGENTE", template: "Verificar INCOTERMS divergente do pedido {pedido}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "005", label: "005 - IMPOSTO DIVERGENTE", template: "Verificar imposto divergente do pedido {pedido}, linhas {linhas}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "006", label: "006 - COND. PAGTO DIVERG.", template: "Verificar condição de pagamento divergente do pedido {pedido}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "007", label: "007 - ITINERARIO INEXIST.", template: "Verificar itinerário inexistente do pedido {pedido}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "008", label: "008 - TARIFA INEXISTENTE", template: "Verificar tarifa inexistente do pedido {pedido}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "016", label: "016 - FRETE TOTAL DIVERG.", template: "Verificar frete total divergente do pedido {pedido}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "018", label: "018 - ZONA INEXISTENTE", template: "Verificar zona inexistente do pedido {pedido}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "019", label: "019 - TRANSPORT. NÃO EXPAN", template: "Verificar Erro:Transporte Não Expandido do pedido {pedido}, conforme chave de acesso NFE {chave_nfe} e CTE {chave_cte}." },
+      { id: "021", label: "021 - TRANSP. NÃO CADASTR.", template: "Verificar Erro: Transportadora não Cadastrada do pedido {pedido}, conforme chave de acesso NFE {chave_nfe} e CTE {chave_cte}." },
+      { id: "023", label: "023 - IVA DIVERGENTE", template: "Verificar IVA do pedido {pedido}, linhas {linhas}, conforme chave de acesso NFE {chave_nfe}. Motivo: {motivo}. Obs.: NCM e Origem verificados." },
+      { id: "035", label: "035 - CONTROLE DE CONFIRMA", template: "Verificar o erro Controle de Confirma do pedido {pedido}, Linha: {linhas} conforme chave de acesso NFE {chave_nfe}" },
+      { id: "036", label: "036 - ORÇAMENTO EXCEDIDO", template: "Verificar o erro Orçamento Excedido do pedido {pedido}, linhas {linhas}, conforme chave de acesso NFE {chave_nfe}" },
+      { id: "037", label: "037 - FRETE ABSOLUTO", template: "Verificar frete absoluto do pedido {pedido}, linhas {linhas}, conforme chave de acesso NFE {chave_nfe}" },
+      { id: "039", label: "039 - CENTRO DE CUSTO DIVE", template: "Verificar o erro Centro Divergente do pedido {pedido} Linha: {linhas}, conforme chave de acesso NFE {chave_nfe}" },
+      { id: "040", label: "040 - LIBERAÇÃO DE PEDIDO", template: "Verificar o pedido {pedido}, conforme chave de acesso NFE {chave_nfe}" },
+      { id: "041", label: "041 - RETIRAR REMESSA FINAL", template: "Retirar o fleg remessa final do pedido {pedido}, linha {linhas}, conforme chave de acesso NFE {chave_nfe}." },
+      { id: "044", label: "044 - FALTA DO FLEG REVFAT", template: "Verificar FALTA DO FLEG REVFATEM do pedido {pedido}, linhas {linhas}, conforme chave de acesso NFE {chave_nfe}" },
+      { id: "045", label: "045 - PEDIDO SEM CONDIÇÃO", template: "Verificar condição de pagamento do pedido {pedido}, linhas {linhas} , conforme chave de acesso NFE {chave_nfe}" },
+      { id: "054", label: "054 - PEDIDO DIVERGENTE", template: "Verificar pedido {pedido} Linha: {linhas}, conforme chave de acesso NFE {chave_nfe}" },
+      { id: "056", label: "056 - PREÇO DIV COM MIGO", template: "Verificar preço liquido do pedido {pedido}, linhas {linhas}, conforme chave de acesso NFE {chave_nfe}. Obs.: IVA, NCM e Origem verificados" },
+      { id: "057", label: "057 - INCOTERM Z15", template: "Ajustar INCOTERM do pedido {pedido} para Z15, conforme chave de acesso NFE {chave_nfe} e CTE {chave_cte}" },
+      { id: "058", label: "058 - INCOTERM Z16 LOTAÇÃO", template: "Ajustar INCOTERM do pedido {pedido} para Z16 LOTAÇÃO, conforme chave de acesso NFE {chave_nfe} e CTE {chave_cte}" },
+      { id: "059", label: "059 - INCOTERM Z16 COLETA", template: "Ajustar INCOTERM do pedido {pedido} para Z16 COLETA, conforme chave de acesso NFE {chave_nfe} e CTE {chave_cte}" },
+      { id: "060", label: "060 - INCOTERM Z16 FRACION", template: "Ajustar INCOTERM do pedido {pedido} para Z16 FRACIONADO, conforme chave de acesso NFE {chave_nfe} e CTE {chave_cte}" },
+      { id: "061", label: "061 - OTM CAIXA PLASTICA", template: "Pedido: {pedido} DT: {dt} Motivo DIV: {motivo} Ação: {acao} chave NFE {chave_nfe} CTE {chave_cte}" },
+      { id: "062", label: "062 - OTM MALTOSE", template: "Pedido: {pedido} DT: {dt} Motivo DIV: {motivo} Ação: {acao} chave NFE {chave_nfe} CTE {chave_cte}" },
+      { id: "063", label: "063 - OTM PREFORMA", template: "Pedido: {pedido} DT: {dt} Motivo DIV: {motivo} Ação: {acao} chave NFE {chave_nfe} CTE {chave_cte}" },
+      { id: "064", label: "064 - OTM ACUCAR", template: "Pedido: {pedido} DT: {dt} Motivo DIV: {motivo} Ação: {acao} chave NFE {chave_nfe} CTE {chave_cte}" },
+      { id: "065", label: "065 - OTM ORI VILA VELHA", template: "Pedido: {pedido} DT: {dt} Motivo DIV: {motivo} Ação: {acao} chave NFE {chave_nfe} CTE {chave_cte}" },
+      { id: "066", label: "066 - OTM MALTE", template: "Pedido: {pedido} DT: {dt} Motivo DIV: {motivo} Ação: {acao} chave NFE {chave_nfe} CTE {chave_cte}" },
+      { id: "067", label: "067 - OTM GARRAFA", template: "Pedido: {pedido} DT: {dt} Motivo DIV: {motivo} Ação: {acao} chave NFE {chave_nfe} CTE {chave_cte}" },
+      { id: "074", label: "074 - FRETE TOT DIV COMEX", template: "Verificar frete total divergente do pedido {pedido}, conforme chave de acesso CTE {chave_cte}, Tipo de veiculo: {itinerario}, Itinerario: {itinerario}, Tipo de Transporte: {itinerario}" },
+      { id: "075", label: "075 - TARIFA INEXIST COMEX", template: "Verificar Erro: 'Não é possivel salvar item com valor zero', do Pedido: {pedido} conforme chave de acesso CTE: {chave_cte}, Tipo de veiculo: {itinerario}, Itinerario: {itinerario}, Tipo de Transporte: {itinerario}" },
+      { id: "076", label: "076 - OTM - FRET PALET GAR", template: "Pedido: {pedido} DT: {dt} Motivo DIV: {motivo} Frete Total DIV Garrafa Ação: {acao} Identificar se houve erro de paletização chave CTE: {chave_cte} NFE: {chave_nfe}" },
+      { id: "077", label: "077 - INCOTERM Z15 - STE", template: "Ajustar INCOTERM do pedido {pedido} para Z15, conforme chave de acesso NFE {chave_nfe} e CTE {chave_cte} OBS: {motivo}" }
+    ];
+
+    const customStorageKey = 'dpCustomTypes';
+    let currentOptions = [...defaultOptions];
+
+    // Funções principais
+    function updateOutput(){
+      const select = $dp('dp-tipo');
+      if(!select) return;
+      const opt = currentOptions.find(o => o.id === select.value);
+      if(!opt) return;
+
+      let text = opt.template;
+      const values = {
+        pedido: $dp('dp-pedido').value || '[PEDIDO]',
+        linhas: $dp('dp-linhas').value || '[LINHAS]',
+        chave_nfe: $dp('dp-chave-nfe').value || '[CHAVE NFE]',
+        chave_cte: $dp('dp-chave-cte').value || '[CHAVE CTE]',
+        dt: $dp('dp-dt').value || '[DT]',
+        motivo: $dp('dp-motivo').value || '[MOTIVO]',
+        acao: $dp('dp-acao').value || '[AÇÃO]',
+        itinerario: $dp('dp-itinerario').value || '[DADOS TRANSPORTE]'
+      };
+
+      for(const key in values){
+        text = text.replace(new RegExp(`\\{${key}\\}`, 'g'), values[key]);
+      }
+      if($dp('dp-output')) $dp('dp-output').value = text;
+    }
+
+    function refreshSelect(){
+      const select = $dp('dp-tipo');
+      if(!select) return;
+      const val = select.value;
+      select.innerHTML = '';
+      currentOptions.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt.id;
+        o.textContent = opt.label;
+        select.appendChild(o);
+      });
+      if(val) select.value = val;
+    }
+
+    function renderCustomList(){
+      const list = $dp('dp-custom-list');
+      if(!list) return;
+      const customOnes = currentOptions.filter(o => o.id.startsWith('CUSTOM_'));
+      if(customOnes.length === 0){
+        list.innerHTML = '<p style="color:var(--txt-3);font-size:12px">Nenhum tipo personalizado criado ainda.</p>';
+        return;
+      }
+      list.innerHTML = customOnes.map(ct => `
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;justify-content:space-between;align-items:center">
+          <div style="overflow:hidden;margin-right:10px">
+            <div style="font-weight:600;font-size:12px;color:var(--txt-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ct.label}</div>
+            <div style="font-size:11px;color:var(--txt-3);margin-top:4px;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ct.template}</div>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="window.dpDeleteCustom('${ct.id}')" style="width:auto;flex-shrink:0">Remover</button>
+        </div>
+      `).join('');
+    }
+
+    // Expor funções globais
+    window.dpOpenManage = function() {
+      const mod = document.getElementById('dp-custom-modal');
+      if(mod) {
+        mod.classList.add('show');
+        renderCustomList();
+      }
+    };
+
+    window.dpDeleteCustom = function(id) {
+      currentOptions = currentOptions.filter(o => o.id !== id);
+      const customOnly = currentOptions.filter(o => o.id.startsWith('CUSTOM_'));
+      localStorage.setItem(customStorageKey, JSON.stringify(customOnly));
+      refreshSelect();
+      renderCustomList();
+      updateOutput();
+    };
+
+    // Inicialização
+    function init(){
+      // Carregar salvos
+      const saved = JSON.parse(localStorage.getItem(customStorageKey) || '[]');
+      currentOptions = [...defaultOptions, ...saved];
+      
+      refreshSelect();
+      
+      // Eventos de Input
+      ['dp-tipo','dp-pedido','dp-linhas','dp-chave-nfe','dp-chave-cte','dp-dt','dp-motivo','dp-acao','dp-itinerario'].forEach(id => {
+        const el = $dp(id);
+        if(el) el.oninput = updateOutput;
+      });
+
+      // Botão Copiar
+      if($dp('dp-btn-copy')){
+        $dp('dp-btn-copy').onclick = () => {
+          const text = $dp('dp-output').value;
+          if(!text) return;
+          navigator.clipboard.writeText(text).then(() => {
+            const btn = $dp('dp-btn-copy');
+            const old = btn.textContent;
+            btn.textContent = 'Copiado!';
+            btn.classList.add('btn-success');
+            setTimeout(() => { btn.textContent = old; btn.classList.remove('btn-success'); }, 2000);
+          });
+        };
+      }
+
+      // Botão Limpar
+      if($dp('dp-btn-clear')){
+        $dp('dp-btn-clear').onclick = () => {
+          ['dp-pedido','dp-linhas','dp-chave-nfe','dp-chave-cte','dp-dt','dp-motivo','dp-acao','dp-itinerario'].forEach(id => {
+            if($dp(id)) $dp(id).value = '';
+          });
+          updateOutput();
+        };
+      }
+
+      // Modal Eventos
+      if($dp('dp-custom-close')) $dp('dp-custom-close').onclick = () => $dp('dp-custom-modal').classList.remove('show');
+      if($dp('dp-custom-modal')) $dp('dp-custom-modal').onclick = (e) => { if(e.target === $dp('dp-custom-modal')) $dp('dp-custom-modal').classList.remove('show'); };
+      
+      if($dp('dp-custom-add')){
+        $dp('dp-custom-add').onclick = () => {
+          const name = $dp('dp-custom-name').value.trim();
+          const template = $dp('dp-custom-template').value.trim();
+          if(!name || !template) { alert('Preencha nome e modelo.'); return; }
+          
+          const newOpt = { id: 'CUSTOM_' + Date.now(), label: name, template };
+          currentOptions.push(newOpt);
+          const customOnly = currentOptions.filter(o => o.id.startsWith('CUSTOM_'));
+          localStorage.setItem(customStorageKey, JSON.stringify(customOnly));
+          
+          $dp('dp-custom-name').value = '';
+          $dp('dp-custom-template').value = '';
+          refreshSelect();
+          $dp('dp-tipo').value = newOpt.id;
+          renderCustomList();
+          updateOutput();
+        };
+      }
+
+      // Auto-preenchimento ao trocar aba
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          if(tab.dataset.target === 'panel-div-padrao'){
+            if(window.AppState && AppState.confrontoData && AppState.confrontoData.length > 0){
+              const row = AppState.confrontoData[0];
+              if(!$dp('dp-pedido').value) $dp('dp-pedido').value = (row['Ped-Item'] || '').split('-')[0] || '';
+              if(!$dp('dp-chave-nfe').value) $dp('dp-chave-nfe').value = row['Chave NF-e'] || row['Chave'] || '';
+              updateOutput();
+            }
+          }
+        });
+      });
+
+      updateOutput();
+    }
+
+    // Aguardar o DOM estar pronto
+    if(document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+
+	/* ==============================================================================
+	   MÓDULO COTAÇÕES BCB · API PTAX
+	   ============================================================================== */
+	(function(){
+
+  const BASE = 'https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata';
+
+  // Estado do módulo
+  let bcbState = { taxa: null, resultados: [] };
+
+  // Inicializar data padrão = hoje
+  function initDates(){
+    const hoje = new Date();
+    const fmt = d => d.toISOString().slice(0,10);
+    const ontem = new Date(hoje); ontem.setDate(hoje.getDate()-1);
+    const mesCheio = new Date(hoje); mesCheio.setDate(1);
+
+    document.getElementById('bcb-data').value   = fmt(hoje);
+    document.getElementById('bcb-inicio').value = fmt(mesCheio);
+    document.getElementById('bcb-fim').value    = fmt(hoje);
+  }
+  initDates();
+
+  // Formata data para a API: MM-DD-YYYY
+  function fmtApiDate(isoStr){
+    const [y,m,d] = isoStr.split('-');
+    return `${m}-${d}-${y}`;
+  }
+
+  // Formata data BR: DD/MM/YYYY
+  function fmtBR(isoStr){
+    if(!isoStr) return '';
+    const [y,m,d] = isoStr.slice(0,10).split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  // Formata número
+  function fmtNum(v, dec=4){
+    if(v==null||isNaN(v)) return '-';
+    return new Intl.NumberFormat('pt-BR',{minimumFractionDigits:dec,maximumFractionDigits:dec}).format(v);
+  }
+
+  // Atualiza status dot
+  function setStatus(estado, msg){
+    const dot = document.getElementById('bcb-status-dot');
+    const txt = document.getElementById('bcb-status-txt');
+    if(!dot||!txt) return;
+    const cores = { ok:'var(--ok)', erro:'var(--bad)', loading:'var(--warn)', idle:'var(--txt-3)' };
+    dot.style.background = cores[estado]||cores.idle;
+    dot.style.boxShadow  = estado==='ok' ? '0 0 6px var(--ok)' : estado==='loading' ? '0 0 6px var(--warn)' : 'none';
+    txt.textContent = msg;
+  }
+
+  // Toggle modo de consulta
+  window.bcbToggleMode = function(){
+    const modo = document.getElementById('bcb-modo').value;
+    document.getElementById('bcb-group-data').style.display    = modo==='data'    ? '' : 'none';
+    document.getElementById('bcb-group-inicio').style.display  = modo==='periodo' ? '' : 'none';
+    document.getElementById('bcb-group-fim').style.display     = modo==='periodo' ? '' : 'none';
+    document.getElementById('bcb-group-boletim').style.display = modo==='hoje'    ? 'none' : '';
+    // No modo "hoje" não precisa de data
+    if(modo==='hoje') document.getElementById('bcb-group-data').style.display = 'none';
+  };
+  bcbToggleMode(); // aplicar estado inicial
+
+  // Buscar cotaçÃµes
+  window.bcbBuscar = async function(){
+    const moeda   = document.getElementById('bcb-moeda').value;
+    const modo    = document.getElementById('bcb-modo').value;
+    const boletim = document.getElementById('bcb-boletim').value;
+    const wrap    = document.getElementById('bcb-result-wrap');
+    const btnUsar = document.getElementById('bcb-usar-wrap');
+
+    setStatus('loading','buscando...');
+    btnUsar.style.display = 'none';
+    bcbState.taxa = null;
+    bcbState.resultados = [];
+
+    wrap.innerHTML = `<div class="empty" style="height:100px"><div class="empty-icon" style="font-size:22px">â³</div><p>Consultando API do Banco Central...</p></div>`;
+
+    try {
+      let url, data;
+
+      if(modo === 'hoje'){
+        // Tenta hoje; se não houver resultado (fim de semana/feriado) tenta dias anteriores
+        let found = false;
+        for(let i=0; i<5; i++){
+          const d = new Date(); d.setDate(d.getDate()-i);
+          const ds = fmtApiDate(d.toISOString().slice(0,10));
+          if(moeda==='USD'){
+            url = `${BASE}/CotacaoDolarDia(dataCotacao=@dataCotacao)?@dataCotacao='${ds}'&$format=json`;
+          } else {
+            url = `${BASE}/CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)?@moeda='${moeda}'&@dataCotacao='${ds}'&$format=json`;
+          }
+          const resp = await fetch(url);
+          if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          data = await resp.json();
+          if(data.value && data.value.length > 0){ found=true; break; }
+        }
+        if(!found){ data = { value:[] }; }
+
+      } else if(modo === 'data'){
+        const ds = fmtApiDate(document.getElementById('bcb-data').value);
+        if(moeda==='USD'){
+          url = `${BASE}/CotacaoDolarDia(dataCotacao=@dataCotacao)?@dataCotacao='${ds}'&$format=json`;
+        } else {
+          url = `${BASE}/CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)?@moeda='${moeda}'&@dataCotacao='${ds}'&$format=json`;
+        }
+        const resp = await fetch(url);
+        if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        data = await resp.json();
+
+      } else {
+        // periodo
+        const di = fmtApiDate(document.getElementById('bcb-inicio').value);
+        const df = fmtApiDate(document.getElementById('bcb-fim').value);
+        if(moeda==='USD'){
+          url = `${BASE}/CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)?@dataInicial='${di}'&@dataFinalCotacao='${df}'&$format=json`;
+        } else {
+          url = `${BASE}/CotacaoMoedaPeriodo(moeda=@moeda,dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)?@moeda='${moeda}'&@dataInicial='${di}'&@dataFinalCotacao='${df}'&$format=json`;
+        }
+        const resp = await fetch(url);
+        if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        data = await resp.json();
+      }
+
+      // Filtra boletim se necessário
+      let rows = data.value || [];
+      if(boletim !== 'all'){
+        rows = rows.filter(r => r.tipoBoletim === boletim);
+      }
+
+      if(rows.length===0){
+        setStatus('idle','sem dados');
+        wrap.innerHTML=`<div class="empty" style="height:120px"><div class="empty-icon">ð­</div><p>Nenhuma cotação encontrada para este período.<br><small>Verifique se é dia útil ou tente outro período.</small></p></div>`;
+        return;
+      }
+
+      bcbState.resultados = rows;
+
+      // Pega o Fechamento PTAX mais recente para destaque
+      const fechamentos = rows.filter(r=>r.tipoBoletim==='Fechamento PTAX');
+      const destaque = fechamentos.length ? fechamentos[fechamentos.length-1] : rows[rows.length-1];
+      bcbState.taxa = destaque.cotacaoVenda;
+
+      renderBcbResult(rows, destaque, moeda);
+      setStatus('ok','dados recebidos · BCB/PTAX');
+
+    } catch(e){
+      setStatus('erro','erro na API');
+      wrap.innerHTML=`<div class="empty" style="height:120px"><div class="empty-icon" style="color:var(--bad)">â </div><p style="color:var(--bad)">Erro ao consultar API do BCB.<br><small>${e.message}</small></p></div>`;
+    }
+  };
+
+  function renderBcbResult(rows, destaque, moeda){
+    const wrap = document.getElementById('bcb-result-wrap');
+    const btnUsarWrap = document.getElementById('bcb-usar-wrap');
+    const taxaSel     = document.getElementById('bcb-taxa-selecionada');
+
+    // KPIs
+    const min = Math.min(...rows.map(r=>r.cotacaoVenda));
+    const max = Math.max(...rows.map(r=>r.cotacaoVenda));
+    const avg = rows.reduce((a,r)=>a+r.cotacaoVenda,0)/rows.length;
+
+    // Variação (apenas se período)
+    const primeiro = rows[0].cotacaoVenda;
+    const ultimo   = rows[rows.length-1].cotacaoVenda;
+    const varPct   = ((ultimo-primeiro)/primeiro)*100;
+    const varSinal = varPct>=0 ? '+' : '';
+    const varCor   = varPct>=0 ? 'var(--ok)' : 'var(--bad)';
+
+    const dtDestaque = destaque.dataHoraCotacao ? destaque.dataHoraCotacao.slice(0,10) : '';
+
+    let html = `
+      <div style="margin-bottom:6px;font-family:var(--mono);font-size:11px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em">
+        Cotação ${moeda}/BRL · ${rows.length} registro(s)
+      </div>
+      <div class="bcb-kpi-grid">
+        <div class="bcb-kpi highlight">
+          <div class="bcb-kpi-label">Fechamento PTAX · Venda</div>
+          <div class="bcb-kpi-val">R$ ${fmtNum(destaque.cotacaoVenda)}</div>
+          <div class="bcb-kpi-sub">${fmtBR(dtDestaque)} · ${destaque.tipoBoletim||''}</div>
+        </div>
+        <div class="bcb-kpi">
+          <div class="bcb-kpi-label">Compra (PTAX)</div>
+          <div class="bcb-kpi-val" style="font-size:16px;color:var(--txt-1)">R$ ${fmtNum(destaque.cotacaoCompra)}</div>
+          <div class="bcb-kpi-sub">spread: ${fmtNum(destaque.cotacaoVenda-destaque.cotacaoCompra,4)}</div>
+        </div>`;
+
+    if(rows.length>1){
+      html += `
+        <div class="bcb-kpi">
+          <div class="bcb-kpi-label">Mínimo do período</div>
+          <div class="bcb-kpi-val" style="font-size:16px;color:var(--txt-1)">R$ ${fmtNum(min)}</div>
+        </div>
+        <div class="bcb-kpi">
+          <div class="bcb-kpi-label">Máximo do período</div>
+          <div class="bcb-kpi-val" style="font-size:16px;color:var(--txt-1)">R$ ${fmtNum(max)}</div>
+        </div>
+        <div class="bcb-kpi">
+          <div class="bcb-kpi-label">Média do período</div>
+          <div class="bcb-kpi-val" style="font-size:16px;color:var(--txt-1)">R$ ${fmtNum(avg)}</div>
+        </div>
+        <div class="bcb-kpi">
+          <div class="bcb-kpi-label">Variação</div>
+          <div class="bcb-kpi-val" style="font-size:16px;color:${varCor}">${varSinal}${fmtNum(varPct,2)}%</div>
+          <div class="bcb-kpi-sub">${fmtBR(rows[0].dataHoraCotacao?.slice(0,10))} â ${fmtBR(rows[rows.length-1].dataHoraCotacao?.slice(0,10))}</div>
+        </div>`;
+    }
+    html += '</div>';
+
+    // Tabela
+    html += `
+      <div style="margin-bottom:8px;font-family:var(--mono);font-size:10px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em">
+        Clique em uma linha para selecioná-la como taxa de cÃ¢mbio
+      </div>
+      <table class="dt" style="max-width:900px">
+        <thead>
+          <tr>
+            <th>Data/Hora</th>
+            <th class="r">Compra</th>
+            <th class="r">Venda</th>
+            <th>Tipo Boletim</th>
+            <th class="r">Paridade Compra</th>
+            <th class="r">Paridade Venda</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r,i)=>{
+            const isFech = r.tipoBoletim==='Fechamento PTAX';
+            const isSelected = r===destaque;
+            return `
+              <tr class="bcb-row-sel${isSelected?' selected':''}" data-idx="${i}" style="${isFech?'background:rgba(44,207,102,.07)':''}">
+                <td style="font-family:var(--mono);font-size:12px">${r.dataHoraCotacao?r.dataHoraCotacao.slice(0,16).replace('T',' '):'-'}</td>
+                <td class="r money">${fmtNum(r.cotacaoCompra)}</td>
+                <td class="r money" style="${isFech?'color:var(--ok);font-weight:700':''}">${fmtNum(r.cotacaoVenda)}</td>
+                <td class="muted" style="${isFech?'color:var(--hk-green-200);font-weight:700':''}">${r.tipoBoletim||'-'}</td>
+                <td class="r muted">${fmtNum(r.paridadeCompra,4)}</td>
+                <td class="r muted">${fmtNum(r.paridadeVenda,4)}</td>
+                <td><button class="btn btn-success btn-sm" style="padding:4px 10px;font-size:10px" onclick="bcbUsarLinhaIdx(${i})">Usar</button></td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+
+    wrap.innerHTML = html;
+
+    // Clique na linha para selecionar
+    wrap.querySelectorAll('.bcb-row-sel').forEach(tr=>{
+      tr.addEventListener('click', e=>{
+        if(e.target.tagName==='BUTTON') return;
+        const idx = parseInt(tr.dataset.idx);
+        bcbUsarLinhaIdx(idx);
+      });
+    });
+
+    // Exibir botão "Usar na Calculadora"
+    btnUsarWrap.style.display = '';
+    taxaSel.textContent = `R$ ${fmtNum(bcbState.taxa)} (${destaque.tipoBoletim||''})`;
+  }
+
+  // Usar taxa de uma linha específica
+  window.bcbUsarLinhaIdx = function(idx){
+    const rows = bcbState.resultados;
+    if(!rows||!rows[idx]) return;
+    const r = rows[idx];
+    bcbState.taxa = r.cotacaoVenda;
+
+    // Marca linha como selecionada
+    document.querySelectorAll('#bcb-result-wrap .bcb-row-sel').forEach((tr,i)=>{
+      tr.classList.toggle('selected', i===idx);
+    });
+
+    // Atualiza badge
+    const taxaSel = document.getElementById('bcb-taxa-selecionada');
+    if(taxaSel) taxaSel.textContent = `R$ ${fmtNum(r.cotacaoVenda)} (${r.tipoBoletim||''}) selecionado`;
+
+    // Destaca botão "Usar na Calculadora"
+    document.getElementById('bcb-usar-wrap').style.display='';
+  };
+
+  // Aplicar taxa na calculadora unitária
+  window.bcbUsarTaxa = function(){
+    if(!bcbState.taxa) return;
+    const taxaInp = document.getElementById('cu-taxa');
+    if(taxaInp){
+      taxaInp.value = bcbState.taxa.toFixed(4);
+      // Muda para a aba calculadora
+      document.querySelectorAll('.tab[data-target]').forEach(t=>{
+        t.classList.toggle('active', t.dataset.target==='panel-calc-unit');
+      });
+      document.querySelectorAll('.panel').forEach(p=>{
+        p.classList.toggle('active', p.id==='panel-calc-unit');
+      });
+      // Efeito visual no campo
+      taxaInp.style.borderColor='var(--ok)';
+      taxaInp.style.boxShadow='var(--glow)';
+      setTimeout(()=>{
+        taxaInp.style.borderColor='';
+        taxaInp.style.boxShadow='';
+      },2000);
+    }
+  };
+
+  // Também aplicar na taxa global (sidebar)
+  // ExpÃµe para uso externo
+  window.bcbAplicarTaxaGlobal = function(){
+    if(!bcbState.taxa) return;
+    const el = document.getElementById('inp-taxa');
+    if(el) el.value = bcbState.taxa.toFixed(4);
+  };
+
+  window.bcbLimpar = function(){
+    bcbState = { taxa:null, resultados:[] };
+    document.getElementById('bcb-result-wrap').innerHTML=`
+      <div class="empty" style="height:140px">
+        <div class="empty-icon" style="font-size:28px">ð¦</div>
+        <p>Selecione moeda e período, depois clique em Buscar.</p>
+      </div>`;
+    document.getElementById('bcb-usar-wrap').style.display='none';
+    setStatus('idle','pronto');
+  };
+
+  // Busca automática ao abrir o painel pela primeira vez
+  document.querySelectorAll('.tab[data-target="panel-cotacoes"]').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      const wrap = document.getElementById('bcb-result-wrap');
+      if(wrap && wrap.querySelector('.empty')) {
+        bcbBuscar();
+      }
+    });
+  });
+
+})();
+
+
+</script>
+<!-- MODAL: GERENCIADOR DE TIPOS PERSONALIZADOS -->
+<div id="dp-custom-modal" class="modal-overlay" style="z-index:9999">
+  <div class="modal-content" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title">Gerenciador de Tipos Personalizados</div>
+      <button class="modal-close" id="dp-custom-close">×</button>
+    </div>
+    <div class="modal-body" style="max-height:500px;overflow-y:auto">
+      <div style="margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--line)">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--txt-3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em">Adicionar Novo Tipo</div>
+        <div style="display:grid;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="display:block;font-size:12px;color:var(--txt-2);margin-bottom:4px">Nome do Tipo (ex: 080 - MEU ERRO)</label>
+            <input type="text" id="dp-custom-name" class="ie" style="width:100%;padding:8px 12px" placeholder="Ex: 080 - MEU ERRO">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--txt-2);margin-bottom:4px">Modelo de Texto</label>
+            <textarea id="dp-custom-template" class="ie" style="width:100%;height:80px;padding:8px 12px;font-family:var(--mono);font-size:12px" placeholder="Use {pedido}, {linhas}, {chave_nfe}, {chave_cte}, {dt}, {motivo}, {acao}, {itinerario}"></textarea>
+            <small style="color:var(--txt-3);display:block;margin-top:4px">Dica: Use {pedido}, {linhas}, {chave_nfe}, {chave_cte}, {dt}, {motivo}, {acao}, {itinerario}</small>
+          </div>
+          <button id="dp-custom-add" class="btn btn-primary btn-sm" style="width:auto">Adicionar Tipo</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--txt-3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em">Tipos Personalizados Salvos</div>
+        <div id="dp-custom-list" style="display:flex;flex-direction:column;gap:8px">
+          <p style="color:var(--txt-3);font-size:12px">Nenhum tipo personalizado criado ainda.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
