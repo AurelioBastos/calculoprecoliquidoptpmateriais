@@ -2274,16 +2274,17 @@ function renderEditorTable() {
     });
   });
 
-  // ── Listeners em tempo real para os cards do Resumo Ajustado ──
-  // Qualquer alteração em fator, PIS, taxa ou tipo dispara recálculo dos cards imediatamente
-  DOM.wrapEditor.querySelectorAll('.inp-fator, .inp-pis, .inp-taxa-row, .inp-tipo').forEach(el => {
-    el.addEventListener('input',  updateResumoAjustado);
-    el.addEventListener('change', updateResumoAjustado);
-  });
-  // inp-qtd-ped altera inp-fator via código — o change já é tratado acima,
-  // mas precisamos do update após o fator ser gravado
+  // ── Listeners em tempo real: cards do Resumo Ajustado ──
+  // inp-qtd-ped: usa change (dispara ao sair do campo) + setTimeout para
+  // garantir que o inp-fator já foi atualizado antes do recálculo
   DOM.wrapEditor.querySelectorAll('.inp-qtd-ped').forEach(el => {
     el.addEventListener('change', () => setTimeout(updateResumoAjustado, 0));
+    el.addEventListener('input',  () => setTimeout(updateResumoAjustado, 0));
+  });
+  // PIS, taxa e tipo: input + change
+  DOM.wrapEditor.querySelectorAll('.inp-pis, .inp-taxa-row, .inp-tipo').forEach(el => {
+    el.addEventListener('input',  updateResumoAjustado);
+    el.addEventListener('change', updateResumoAjustado);
   });
 }
 
@@ -3729,102 +3730,95 @@ DOM.btnExportConfronto.addEventListener('click', async () => {
    ────────────────────────────────────────────────────────────── */
 
 function updateResumoAjustado() {
-  // Lê SEMPRE do DOM da tabela (inputs visíveis), garantindo
-  // que valores editados mas ainda não "Recalculados" já apareçam nos cards.
-  const trs = DOM.wrapEditor ? DOM.wrapEditor.querySelectorAll('tbody tr') : [];
+  // Lê os inputs DIRETAMENTE do DOM da tabela e recalcula
+  // espelhando exatamente o calcular_linha() do backend Python.
+  const trs = DOM.wrapEditor ? Array.from(DOM.wrapEditor.querySelectorAll('tbody tr')) : [];
+
+  const badge = document.getElementById('resumo-accordion-badge');
 
   if (!AppState.data || !AppState.data.length || !trs.length) {
-    const badge = document.getElementById('resumo-accordion-badge');
     if (badge) badge.textContent = '0 itens';
     _setResumoKpi('rkpi-total-prod-val', 0);
-    _setResumoKpi('rkpi-bc-icms-val', 0);
-    _setResumoKpi('rkpi-vl-icms-val', 0);
-    _setResumoKpi('rkpi-vl-ipi-val', 0);
+    _setResumoKpi('rkpi-bc-icms-val',    0);
+    _setResumoKpi('rkpi-vl-icms-val',    0);
+    _setResumoKpi('rkpi-vl-ipi-val',     0);
     return;
   }
 
-  // Globais (sidebar)
+  // Valores globais da sidebar
   const pisGlobal  = (parseFloat(DOM.inpPis.value)  || 0) / 100;
-  const taxaGlobal = parseFloat(DOM.inpTaxa.value)  || 1;
+  const taxaGlobal =  parseFloat(DOM.inpTaxa.value)  || 1;
   const tipoGlobal = DOM.selTipo ? DOM.selTipo.value : 'PA/Insumo';
 
-  let sumTotalProd = 0;
-  let sumBcIcms    = 0;
-  let sumVlIcms    = 0;
-  let sumVlIpi     = 0;
-
-  // norm % field (pode vir como 12 ou 0.12)
   function normPct(v) {
-    const n = parseFloat(v) || 0;
+    const n = parseFloat(v);
+    if (isNaN(n) || n === 0) return 0;
     return n > 1 ? n / 100 : n;
   }
+
+  let sumTotalProd = 0, sumBC = 0, sumVlIcms = 0, sumVlIpi = 0;
 
   trs.forEach(tr => {
     const id  = parseInt(tr.dataset.id);
     const ref = AppState.data.find(d => d._id === id);
     if (!ref) return;
 
-    // ── Fator: lê o input readonly que reflete a Qtd Pedido digitada ──
-    const fatorEl  = tr.querySelector('.inp-fator');
-    const fator    = parseFloat(fatorEl ? fatorEl.value : ref['Fator Conv.']) || 1;
+    // ── Qtd NF-e (vem do XML, coluna estática) ──
+    const qNfe = parseFloat(ref['Qtd']) || 1;
 
-    const qNfe     = parseFloat(ref['Qtd']) || 1;
-    const qtdPed   = qNfe * fator;
+    // ── Fator: derivado de inp-qtd-ped (editável) ──
+    const qtdPedEl = tr.querySelector('.inp-qtd-ped');
+    const qtdPed   = qtdPedEl ? (parseFloat(qtdPedEl.value) || qNfe) : qNfe;
+    const fator    = qtdPed / qNfe;          // fator real = qtdPed / qtdNfe
 
-    // ── PIS: input da linha (fallback global) ──
-    const pisEl    = tr.querySelector('.inp-pis');
-    const pisRaw   = pisEl ? pisEl.value : '';
-    const pisRate  = (pisRaw !== '' && pisRaw !== null)
-                     ? parseFloat(pisRaw) / 100
-                     : pisGlobal;
+    // ── PIS por linha (placeholder = global) ──
+    const pisEl   = tr.querySelector('.inp-pis');
+    const pisVal  = pisEl && pisEl.value.trim() !== '' ? parseFloat(pisEl.value) : null;
+    const pisRate = pisVal !== null && !isNaN(pisVal) ? pisVal / 100 : pisGlobal;
 
-    // ── Taxa: input da linha (fallback global) ──
-    const taxaEl   = tr.querySelector('.inp-taxa-row');
-    const taxaRaw  = taxaEl ? taxaEl.value : '';
-    const taxa     = (taxaRaw !== '' && taxaRaw !== null && !isNaN(parseFloat(taxaRaw)))
-                     ? parseFloat(taxaRaw)
-                     : taxaGlobal;
+    // ── Taxa por linha (placeholder = global) ──
+    const taxaEl  = tr.querySelector('.inp-taxa-row');
+    const taxaVal = taxaEl && taxaEl.value.trim() !== '' ? parseFloat(taxaEl.value) : null;
+    const taxa    = taxaVal !== null && !isNaN(taxaVal) ? taxaVal : taxaGlobal;
 
-    // ── Tipo: select da linha ──
-    const tipoEl   = tr.querySelector('.inp-tipo');
-    const tipo     = tipoEl ? tipoEl.value : (ref['Tipo Material'] || tipoGlobal);
+    // ── Tipo por linha ──
+    const tipoEl = tr.querySelector('.inp-tipo');
+    const tipo   = tipoEl ? tipoEl.value : tipoGlobal;
 
-    // ── Percentuais fixos do XML (não editáveis na tabela) ──
-    const vUnit    = parseFloat(ref['Vl Unit']) || 0;
-    const pICMS    = normPct(ref['% ICMS']);
-    const pIPI     = normPct(ref['% IPI']);
-    const pRedBC   = normPct(ref['% Red BC']);
+    // ── Percentuais do XML (fixos) ──
+    const vUnit  = parseFloat(ref['Vl Unit']) || 0;
+    const pICMS  = normPct(ref['% ICMS']);
+    const pIPI   = normPct(ref['% IPI']);
+    const pRedBC = normPct(ref['% Red BC']);
     const pICMS_ef = pICMS * (1 - pRedBC);
 
-    const vUnitPed = vUnit / fator;
+    // ── Espelho exato de calcular_linha() ──
+    const vUnitPed = vUnit / fator;   // preço ajustado pelo fator
 
-    // ── Cálculo igual ao backend calcular_linha ──
-    let totalProd, BC, vICMS, vIPI;
+    let BC, vIPI_linha, vICMS_linha, totalProd;
 
     if (tipo === 'Ativo/Consumo') {
-      totalProd = vUnitPed * qtdPed;
-      BC        = vUnitPed * (1 + pIPI) * qtdPed;
-      vIPI      = vUnitPed * pIPI * qtdPed;
-      vICMS     = (vUnitPed * (1 + pIPI)) * pICMS_ef * qtdPed;
+      BC           = vUnitPed * (1 + pIPI);   // BC unitário
+      vIPI_linha   = vUnitPed * pIPI  * qtdPed;
+      vICMS_linha  = BC * pICMS_ef    * qtdPed;
+      BC           = BC * qtdPed;             // BC total
+      totalProd    = vUnitPed * qtdPed;
     } else {
-      totalProd = vUnitPed * qtdPed;
-      BC        = vUnitPed * qtdPed;
-      vIPI      = 0;
-      vICMS     = BC * pICMS_ef;
+      BC           = vUnitPed * qtdPed;
+      vIPI_linha   = 0;
+      vICMS_linha  = BC * pICMS_ef;
+      totalProd    = BC;
     }
 
     sumTotalProd += totalProd;
-    sumBcIcms    += BC;
-    sumVlIcms    += vICMS;
-    sumVlIpi     += vIPI;
+    sumBC        += BC;
+    sumVlIcms    += vICMS_linha;
+    sumVlIpi     += vIPI_linha;
   });
 
-  // ── Atualiza DOM ──
-  const badge = document.getElementById('resumo-accordion-badge');
-  if (badge) badge.textContent = trs.length + ' ' + (trs.length === 1 ? 'item' : 'itens');
-
+  if (badge) badge.textContent = trs.length + (trs.length === 1 ? ' item' : ' itens');
   _setResumoKpi('rkpi-total-prod-val', sumTotalProd);
-  _setResumoKpi('rkpi-bc-icms-val',    sumBcIcms);
+  _setResumoKpi('rkpi-bc-icms-val',    sumBC);
   _setResumoKpi('rkpi-vl-icms-val',    sumVlIcms);
   _setResumoKpi('rkpi-vl-ipi-val',     sumVlIpi);
 }
