@@ -112,6 +112,73 @@
 html.light .modal-overlay { background: rgba(10, 31, 22, 0.4); }
 html.light .modal-content { background: #fff; box-shadow: 0 20px 50px rgba(0,0,0,0.1); }
 
+/* ── ACCORDION RESUMO AJUSTADO ── */
+.resumo-accordion {
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+.resumo-accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 20px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--surface-2);
+  transition: background .2s ease;
+}
+.resumo-accordion-header:hover {
+  background: var(--surface-3);
+}
+.resumo-accordion-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--hk-green-200);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  flex: 1;
+}
+.resumo-accordion-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--txt-3);
+  background: rgba(44,207,102,.1);
+  border: 1px solid rgba(44,207,102,.2);
+  border-radius: 20px;
+  padding: 2px 9px;
+}
+.resumo-accordion-arrow {
+  font-size: 11px;
+  color: var(--txt-3);
+  transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  flex-shrink: 0;
+}
+.resumo-accordion.open .resumo-accordion-arrow {
+  transform: rotate(180deg);
+}
+.resumo-accordion-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .35s cubic-bezier(.2,.8,.2,1), opacity .3s ease, padding .3s ease;
+  opacity: 0;
+  padding: 0 20px;
+}
+.resumo-accordion.open .resumo-accordion-body {
+  max-height: 200px;
+  opacity: 1;
+  padding: 14px 20px;
+}
+.resumo-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+html.light .resumo-accordion-header { background: var(--surface-2); }
+html.light .resumo-accordion-header:hover { background: var(--surface-3); }
+html.light .resumo-accordion-badge { background: rgba(16,134,71,.08); border-color: rgba(16,134,71,.2); color: var(--hk-green-600); }
+
+
 /* ââ BCB COTAÃÃES STYLES ââ */
 .bcb-kpi-grid{
   display:grid;
@@ -1066,6 +1133,40 @@ html.light .td-highlight-liq{
           <div class="panel-head">
             <span class="panel-hint">Edite as colunas em <span class="green">verde</span> para ajustar fatores por item. Clique em Recalcular para atualizar.</span>
           </div>
+
+          <!-- ACCORDION: RESUMO AJUSTADO -->
+          <div class="resumo-accordion" id="resumo-accordion">
+            <div class="resumo-accordion-header" id="resumo-accordion-header">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--hk-green-300);flex-shrink:0">
+                <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+              </svg>
+              <span class="resumo-accordion-label">Resumo Ajustado &mdash; Edi&ccedil;&atilde;o de Fatores</span>
+              <span class="resumo-accordion-badge" id="resumo-accordion-badge">0 itens</span>
+              <span class="resumo-accordion-arrow">&#9660;</span>
+            </div>
+            <div class="resumo-accordion-body">
+              <div class="resumo-kpi-grid" id="resumo-kpi-grid">
+                <div class="kpi" id="rkpi-total-prod">
+                  <div class="kpi-label">Total do Produto</div>
+                  <div class="kpi-val" id="rkpi-total-prod-val" style="font-size:16px">R$ 0,00</div>
+                </div>
+                <div class="kpi" id="rkpi-bc-icms">
+                  <div class="kpi-label">BC ICMS</div>
+                  <div class="kpi-val" id="rkpi-bc-icms-val" style="font-size:16px">R$ 0,00</div>
+                </div>
+                <div class="kpi" id="rkpi-vl-icms">
+                  <div class="kpi-label">Vl ICMS</div>
+                  <div class="kpi-val" id="rkpi-vl-icms-val" style="font-size:16px">R$ 0,00</div>
+                </div>
+                <div class="kpi" id="rkpi-vl-ipi">
+                  <div class="kpi-label">Vl IPI</div>
+                  <div class="kpi-val" id="rkpi-vl-ipi-val" style="font-size:16px">R$ 0,00</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="table-wrap" id="table-wrap-editor">
             <div class="empty">
               <div class="empty-icon">XML</div>
@@ -1978,6 +2079,7 @@ window.useHistoryItem = function(nf, chave) {
   renderEditorTable();
   renderCompleteTable();
   renderPedItemEditor();
+  updateResumoAjustado();
   
   // Preenche campos do modal DIV
   const nfeInput = document.getElementById('div-nfe-input');
@@ -2037,6 +2139,7 @@ async function callRecalc() {
     renderEditorTable();
     renderCompleteTable();
     renderPedItemEditor();
+    updateResumoAjustado();
   } catch(e){ console.error(e); alert('Falha ao calcular.'); }
 }
 
@@ -3606,6 +3709,119 @@ DOM.btnExportConfronto.addEventListener('click', async () => {
   });
 
 })();
+
+
+
+/* ──────────────────────────────────────────────────────────────
+   ACCORDION RESUMO AJUSTADO – Edição de Fatores
+   ────────────────────────────────────────────────────────────── */
+
+function updateResumoAjustado() {
+  const data = AppState.data;
+  if (!data || !data.length) {
+    const badge = document.getElementById('resumo-accordion-badge');
+    if (badge) badge.textContent = '0 itens';
+    _setResumoKpi('rkpi-total-prod-val', 0);
+    _setResumoKpi('rkpi-bc-icms-val', 0);
+    _setResumoKpi('rkpi-vl-icms-val', 0);
+    _setResumoKpi('rkpi-vl-ipi-val', 0);
+    return;
+  }
+
+  const pisGlobal  = (parseFloat(DOM.inpPis.value)  || 0) / 100;
+  const taxaGlobal = parseFloat(DOM.inpTaxa.value)  || 1;
+  const tipoGlobal = DOM.selTipo ? DOM.selTipo.value : 'PA/Insumo';
+
+  let sumTotalProd = 0;
+  let sumBcIcms    = 0;
+  let sumVlIcms    = 0;
+  let sumVlIpi     = 0;
+
+  data.forEach(r => {
+    // ---------- resolve per-row overrides (sem multiplicador) ----------
+    const fator  = parseFloat(r['Fator Conv.'])  || 1;
+    const qNfe   = parseFloat(r['Qtd'])          || 1;
+    const qtdPed = qNfe * fator;
+
+    const taxaRow = r['Taxa Câmbio'] != null ? parseFloat(r['Taxa Câmbio']) : null;
+    const taxa    = (taxaRow !== null && !isNaN(taxaRow)) ? taxaRow : taxaGlobal;
+
+    const pisRowRaw = r['% PIS+COFINS'];
+    const pisRate   = (pisRowRaw !== null && pisRowRaw !== undefined && pisRowRaw !== '')
+                      ? parseFloat(pisRowRaw) / 100
+                      : pisGlobal;
+
+    const tipo = r['Tipo Material'] || tipoGlobal;
+
+    const vUnit   = parseFloat(r['Vl Unit']) || 0;
+    const vUnitPed = vUnit / fator;           // preço unitário no pedido
+
+    // norm % field (pode vir como 12 ou 0.12)
+    function normPct(v) {
+      const n = parseFloat(v) || 0;
+      return n > 1 ? n / 100 : n;
+    }
+
+    const pICMS  = normPct(r['% ICMS']);
+    const pIPI   = normPct(r['% IPI']);
+    const pRedBC = normPct(r['% Red BC']);
+    const pICMS_ef = pICMS * (1 - pRedBC);
+
+    // ---------- calcular totais por linha ----------
+    let totalProd, BC, vICMS, vIPI;
+
+    if (tipo === 'Ativo/Consumo') {
+      totalProd = vUnitPed * qtdPed;
+      BC        = vUnitPed * (1 + pIPI);          // BC unitário
+      vIPI      = vUnitPed * pIPI * qtdPed;
+      vICMS     = BC * pICMS_ef * qtdPed;
+      BC        = BC * qtdPed;                     // BC total
+    } else {
+      totalProd = vUnitPed * qtdPed;
+      BC        = vUnitPed * qtdPed;
+      vIPI      = 0;
+      vICMS     = BC * pICMS_ef;
+    }
+
+    sumTotalProd += totalProd;
+    sumBcIcms    += BC;
+    sumVlIcms    += vICMS;
+    sumVlIpi     += vIPI;
+  });
+
+  // ---------- update DOM ----------
+  const badge = document.getElementById('resumo-accordion-badge');
+  if (badge) badge.textContent = data.length + ' ' + (data.length === 1 ? 'item' : 'itens');
+
+  _setResumoKpi('rkpi-total-prod-val', sumTotalProd);
+  _setResumoKpi('rkpi-bc-icms-val',    sumBcIcms);
+  _setResumoKpi('rkpi-vl-icms-val',    sumVlIcms);
+  _setResumoKpi('rkpi-vl-ipi-val',     sumVlIpi);
+}
+
+function _setResumoKpi(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const fmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  el.textContent = 'R$ ' + fmt.format(val);
+}
+
+// Accordion toggle
+(function() {
+  const hdr = document.getElementById('resumo-accordion-header');
+  const acc = document.getElementById('resumo-accordion');
+  if (hdr && acc) {
+    hdr.addEventListener('click', () => {
+      acc.classList.toggle('open');
+    });
+  }
+})();
+
+// Re-render accordion when global PIS or Taxa change
+['inp-pis', 'inp-taxa'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updateResumoAjustado);
+});
 
 
 </script>
