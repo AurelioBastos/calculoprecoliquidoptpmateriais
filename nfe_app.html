@@ -2902,13 +2902,13 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
     }
 
     // ── 3. QUANTIDADE ──────────────────────────────────────────────────────────
-    // "Qtd Pedido" da Edição Fatores = src['Qtd Pedido'] (calculada no recalc).
-    // "Quantidade" do upload = src['Qtd'] (da NF-e / XML).
-    // Divergência: quando Qtd Pedido != Qtd NF-e (indica fator de conversão ativo).
-    const qtdNFe    = parseFloat(src['Qtd']         || 0);
-    const qtdPedido = parseFloat(src['Qtd Pedido']  || 0);
-    if (qtdNFe > 0 && qtdPedido > 0 && Math.abs(qtdNFe - qtdPedido) > 0.0001) {
-      alerts.push({ cls: 'qty', icon: 'Q', msg: `Quantidade divergente. Verificar possível fator de conversão ou inconsistência no pedido. (NF-e: ${qtdNFe} · Ped: ${qtdPedido})` });
+    // Compara Quantidade da planilha PC (r['Qtd PC'], retornado pelo backend)
+    // com a Quantidade da NF-e (src['Qtd']).
+    // Divergência real: PC tem quantidade diferente do que veio na nota.
+    const qtdNFe    = parseFloat(src['Qtd'] || 0);
+    const qtdPC     = r['Qtd PC'] != null ? parseFloat(r['Qtd PC']) : null;
+    if (qtdNFe > 0 && qtdPC != null && Math.abs(qtdNFe - qtdPC) > 0.0001) {
+      alerts.push({ cls: 'qty', icon: 'Q', msg: `Quantidade divergente. Verificar possível fator de conversão ou inconsistência no pedido. (NF-e: ${qtdNFe} · PC: ${qtdPC})` });
     }
 
     if (!alerts.length) return '';

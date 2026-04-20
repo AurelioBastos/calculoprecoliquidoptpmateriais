@@ -403,6 +403,8 @@ async def confronto_pc(
         "aliq_red_bc": {"aliqredbicms", "redbc", "reducaobc", "aliqredbc"},
         "vl_pis_cofins": {"valorpiscofins", "vlpiscofins", "piscofins", "valpiscofins",
                           "valorpis", "vlpis", "pisecofins", "pisecof"},
+        "quantidade_pc": {"quantidade", "qtd", "qty", "quant", "quantidadepedido",
+                          "qtdpedido", "qtdpc"},
     }
 
     # Minimo para confrontar: chave e valor liquido.
@@ -462,6 +464,14 @@ async def confronto_pc(
             h = _find_contains("pis")
             if h:
                 resolved["vl_pis_cofins"] = h
+        if "quantidade_pc" not in resolved:
+            h = _find_contains("quantidade")
+            if h:
+                resolved["quantidade_pc"] = h
+        if "quantidade_pc" not in resolved:
+            h = _find_contains("qtd")
+            if h:
+                resolved["quantidade_pc"] = h
         return resolved
 
     # Tenta diferentes abas e linhas de cabecalho para CADA arquivo enviado
@@ -788,6 +798,12 @@ async def confronto_pc(
                 pc_pis = pc[best_map["vl_pis_cofins"]]
                 vl_pis_pc = _to_num(pc_pis) if pd.notna(pc_pis) else 0.0
 
+            # Lê Quantidade da planilha PC (opcional)
+            qtd_pc = None
+            if "quantidade_pc" in best_map:
+                pc_qtd = pc[best_map["quantidade_pc"]]
+                qtd_pc = _to_num(pc_qtd) if pd.notna(pc_qtd) else None
+
             result.append({**base,
                 'Vl Líq Unit PC': round(vl_pc, 2), 'Dif. Vl Unit': dif_vl,
                 'Lim. Tolerância': round(lim_tol,2), 'Status Dif.': st_dif,
@@ -798,6 +814,7 @@ async def confronto_pc(
                 'Origem PC': orig_pc, 'Status Origem': st_orig,
                 'Aliq.Red.B.ICMS': pr, 'Status Red BC': st_red,
                 'Vl PIS+COFINS PC': round(vl_pis_pc, 4),
+                'Qtd PC': qtd_pc,
                 # aliases para frontend legado
                 'Orig XML': base.get('Origem XML'),
                 'Orig PC': orig_pc,
@@ -816,6 +833,7 @@ async def confronto_pc(
                 'Origem PC': None, 'Status Origem': 'SEM MATCH',
                 'Aliq.Red.B.ICMS': None,
                 'Vl PIS+COFINS PC': None,
+                'Qtd PC': None,
                 # aliases para frontend legado
                 'Orig XML': base.get('Origem XML'),
                 'Orig PC': None,
