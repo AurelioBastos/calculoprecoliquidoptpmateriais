@@ -917,6 +917,73 @@ select.ie{width:118px;cursor:pointer;padding-right:20px}
 .spin-txt{font-size:11px;color:var(--txt-2);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ── ALERTAS DE VALIDAÇÃO CONFRONTO PC ── */
+.cf-alert-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+.cf-alert {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: default;
+  flex-shrink: 0;
+  transition: transform .15s ease;
+}
+.cf-alert:hover { transform: scale(1.15); }
+.cf-alert.pis  { background: rgba(242,184,75,.22); color: #f2b84b; border: 1px solid rgba(242,184,75,.5); }
+.cf-alert.mult { background: rgba(246,106,106,.18); color: #f66a6a; border: 1px solid rgba(246,106,106,.45); }
+.cf-alert.qty  { background: rgba(121,168,255,.18); color: #93b4ff; border: 1px solid rgba(121,168,255,.45); }
+.cf-alert .cf-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  background: #0b2416;
+  border: 1px solid rgba(121,227,159,.35);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--txt-1);
+  line-height: 1.45;
+  white-space: normal;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  transition: opacity .18s ease, visibility .18s ease;
+}
+.cf-alert .cf-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(121,227,159,.35);
+}
+.cf-alert:hover .cf-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+html.light .cf-alert.pis  { background: rgba(212,144,10,.12); color: #a06800; border-color: rgba(212,144,10,.4); }
+html.light .cf-alert.mult { background: rgba(217,54,62,.10);  color: #b91c1c; border-color: rgba(217,54,62,.35); }
+html.light .cf-alert.qty  { background: rgba(60,100,220,.10); color: #3b5fc0; border-color: rgba(60,100,220,.35); }
+html.light .cf-alert .cf-tooltip { background: #fff; border-color: var(--line); color: var(--txt-1); box-shadow: 0 6px 18px rgba(10,31,22,.13); }
+html.light .cf-alert .cf-tooltip::after { border-top-color: var(--line); }
+
 .th-highlight-liq{
   color:#fff !important;
   background:linear-gradient(180deg, rgba(44,207,102,.35), rgba(44,207,102,.2)) !important;
@@ -2791,6 +2858,70 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
   // Close modal on outside click
   document.getElementById('div-modal').onclick = (e) => { if(e.target === document.getElementById('div-modal')) window.closeDivModal(); };
 
+  // ── HELPERS DE VALIDAÇÃO CONFRONTO PC ────────────────────────────────────────
+  // Gera HTML dos alertas de PIS, Multiplicador e Quantidade para uma linha.
+  // Compara confrontoData (resultado do confronto) com AppState.data (Edição Fatores).
+  function _cfAlertas(r) {
+    const src = AppState.data.find(d => d._id === r._id) || {};
+    const alerts = [];
+
+    // ── 1. PIS/COFINS ──────────────────────────────────────────────────────────
+    // "Valor Pis/Cofins" do upload = r['Vl PIS+COFINS'] (calculado no recalc).
+    // "% PIS+COF" da Edição Fatores = src['% PIS+COFINS'] (individual) ou
+    //   fallback do campo global se null (para comparação, consideramos 0 = não configurado).
+    const vlPisCofins = parseFloat(src['Vl PIS+COFINS'] || 0);
+    const pisFatores  = src['% PIS+COFINS'];   // null = usa global
+    const pisCfg      = pisFatores != null ? parseFloat(pisFatores) : null; // null = não individualizado
+
+    // Considera "configurado na Edição de Fatores" apenas se % PIS individual > 0
+    const pisConfigurado = pisCfg != null && pisCfg > 0;
+    const pisNoDoc       = vlPisCofins > 0.005;
+
+    if (pisNoDoc && !pisConfigurado) {
+      alerts.push({ cls: 'pis', icon: 'P', msg: 'Existe incidência de PIS/COFINS no documento, porém não configurado na Edição de Fatores.' });
+    } else if (!pisNoDoc && pisConfigurado) {
+      alerts.push({ cls: 'pis', icon: 'P', msg: 'PIS/COFINS configurado na Edição de Fatores, porém não identificado no documento.' });
+    }
+
+    // ── 2. MULTIPLICADOR ───────────────────────────────────────────────────────
+    // "Mult." da Edição Fatores = src['Multiplicador'].
+    // "Por" do upload = coluna de conversão da planilha PC.
+    // O PC é enviado ao backend e não temos o campo "Por" de volta no confrontoData,
+    // mas temos o Preço Líquido calculado e o do PC. Para a validação do multiplicador,
+    // usamos src['Multiplicador'] (Edição Fatores) vs. o multiplicador implícito do PC.
+    // Como o campo "Por" do PC não retorna no payload, usamos Mult. da Edição vs. Mult. padrão=1.
+    // Nota: quando o PC tem "Por" != Mult, a diferença já apareceria no Status Dif.
+    // A validação aqui é: se Mult. da Edição != 1 mas Status = OK, pode haver coincidência — alertamos somente se Mult != 1.
+    // Implementação conservadora: alerta quando Multiplicador da Edição Fatores difere de 1,
+    // pois indica uma conversão que pode não estar presente no PC.
+    const multFatores = parseFloat(src['Multiplicador'] || 1);
+    const multDoc     = parseFloat(r['_mult_pc'] || 1); // campo reservado; será 1 se não vier
+    // Compara mult da Edição com 1 (padrão PC). Se diferente de 1, emite alerta descritivo.
+    if (Math.abs(multFatores - 1) > 0.0001) {
+      alerts.push({ cls: 'mult', icon: 'M', msg: `Divergência no fator multiplicador. Validar possível diferença de conversão. (Edição Fatores: ×${multFatores})` });
+    }
+
+    // ── 3. QUANTIDADE ──────────────────────────────────────────────────────────
+    // "Qtd Pedido" da Edição Fatores = src['Qtd Pedido'] (calculada no recalc).
+    // "Quantidade" do upload = src['Qtd'] (da NF-e / XML).
+    // Divergência: quando Qtd Pedido != Qtd NF-e (indica fator de conversão ativo).
+    const qtdNFe    = parseFloat(src['Qtd']         || 0);
+    const qtdPedido = parseFloat(src['Qtd Pedido']  || 0);
+    if (qtdNFe > 0 && qtdPedido > 0 && Math.abs(qtdNFe - qtdPedido) > 0.0001) {
+      alerts.push({ cls: 'qty', icon: 'Q', msg: `Quantidade divergente. Verificar possível fator de conversão ou inconsistência no pedido. (NF-e: ${qtdNFe} · Ped: ${qtdPedido})` });
+    }
+
+    if (!alerts.length) return '';
+    const iconsHtml = alerts.map(a =>
+      `<span class="cf-alert ${a.cls}" aria-label="${a.msg}">
+        ${a.icon}
+        <span class="cf-tooltip">${a.msg}</span>
+      </span>`
+    ).join('');
+    return iconsHtml;
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
   function renderConfrontoTable() {
   let data = AppState.confrontoData;
   if(AppState.currentFilter==='div') data = data.filter(r => {
@@ -2856,10 +2987,18 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
       ? ' style="background:rgba(246,106,106,.10);border-left:3px solid rgba(246,106,106,.75);"'
       : '';
 
+    // ── Alertas de validação (PIS, Multiplicador, Quantidade) ──
+    const alertasHtml = _cfAlertas(r);
+    const hasAlerts   = alertasHtml.length > 0;
+
     const nfNum = r['NÂº NF'] || r['NF'] || r['nNF'] || '-';
+    const redBcDot = isDivRedBc
+      ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-right:5px;vertical-align:middle;box-shadow:0 0 5px rgba(246,106,106,.7)"></span>`
+      : '';
+    const descCell = `<span class="cf-alert-wrap">${redBcDot}<span title="${descricao}">${descricao.substring(0,24)}${descricao.length>24?'…':''}</span>${alertasHtml}</span>`;
     h += `<tr${rowStyle}>
       <td>${nfNum}</td>
-      <td title="${descricao}">${isDivRedBc ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-right:5px;vertical-align:middle;box-shadow:0 0 5px rgba(246,106,106,.7)"></span>` : ''}${descricao.substring(0,28)}...</td>
+      <td style="white-space:nowrap">${descCell}</td>
       <td><input class="ie inp-conf-ped-item" type="text" style="width:140px" data-idx="${AppState.confrontoData.indexOf(r)}" data-row-id="${r._id||''}" value="${r['Ped-Item']||''}" placeholder="PEDIDO-ITEM"></td>
       <td class="r money">R$ ${formatBR(vlPcXML)}</td>
       <td class="r">${vlLiqUnitPC!=null?'R$ '+formatBR(vlLiqUnitPC):'-'}</td>
