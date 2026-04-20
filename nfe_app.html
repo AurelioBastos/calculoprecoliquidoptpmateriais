@@ -2109,7 +2109,10 @@ DOM.btnRecalc.addEventListener('click', async () => {
     const id = parseInt(tr.dataset.id);
     const ref = AppState.data.find(d => d._id === id);
     if(ref){
-      ref['Fator Conv.']   = parseFloat(tr.querySelector('.inp-fator').value) || 1;
+      // inp-fator é readonly; calcula fator a partir da qtd do pedido
+      const qtdPedVal = parseFloat(tr.querySelector('.inp-qtd-ped').value);
+      const qtdNfeVal = parseFloat(ref['Qtd']) || 1;
+      ref['Fator Conv.']   = (qtdPedVal > 0) ? Math.round((qtdPedVal / qtdNfeVal) * 100000) / 100000 : (parseFloat(tr.querySelector('.inp-fator').value) || 1);
       ref['Multiplicador'] = parseFloat(tr.querySelector('.inp-mult').value)  || 1;
       const pisRaw = tr.querySelector('.inp-pis').value;
       ref['% PIS+COFINS']  = (pisRaw !== '' && pisRaw !== null) ? parseFloat(pisRaw) : null;
@@ -2274,18 +2277,7 @@ function renderEditorTable() {
     });
   });
 
-  // ── Listeners em tempo real: cards do Resumo Ajustado ──
-  // inp-qtd-ped: usa change (dispara ao sair do campo) + setTimeout para
-  // garantir que o inp-fator já foi atualizado antes do recálculo
-  DOM.wrapEditor.querySelectorAll('.inp-qtd-ped').forEach(el => {
-    el.addEventListener('change', () => setTimeout(updateResumoAjustado, 0));
-    el.addEventListener('input',  () => setTimeout(updateResumoAjustado, 0));
-  });
-  // PIS, taxa e tipo: input + change
-  DOM.wrapEditor.querySelectorAll('.inp-pis, .inp-taxa-row, .inp-tipo').forEach(el => {
-    el.addEventListener('input',  updateResumoAjustado);
-    el.addEventListener('change', updateResumoAjustado);
-  });
+
 }
 
 /* 
@@ -3730,97 +3722,32 @@ DOM.btnExportConfronto.addEventListener('click', async () => {
    ────────────────────────────────────────────────────────────── */
 
 function updateResumoAjustado() {
-  // Lê os inputs DIRETAMENTE do DOM da tabela e recalcula
-  // espelhando exatamente o calcular_linha() do backend Python.
-  const trs = DOM.wrapEditor ? Array.from(DOM.wrapEditor.querySelectorAll('tbody tr')) : [];
-
+  // Soma os campos calculados pelo backend em calcular_linha()
+  // Esses campos chegam em AppState.data após callRecalc()
+  const data  = AppState.data;
   const badge = document.getElementById('resumo-accordion-badge');
 
-  if (!AppState.data || !AppState.data.length || !trs.length) {
+  if (!data || !data.length) {
     if (badge) badge.textContent = '0 itens';
-    _setResumoKpi('rkpi-total-prod-val', 0);
-    _setResumoKpi('rkpi-bc-icms-val',    0);
-    _setResumoKpi('rkpi-vl-icms-val',    0);
-    _setResumoKpi('rkpi-vl-ipi-val',     0);
+    ['rkpi-total-prod-val','rkpi-bc-icms-val','rkpi-vl-icms-val','rkpi-vl-ipi-val']
+      .forEach(id => _setResumoKpi(id, 0));
     return;
   }
 
-  // Valores globais da sidebar
-  const pisGlobal  = (parseFloat(DOM.inpPis.value)  || 0) / 100;
-  const taxaGlobal =  parseFloat(DOM.inpTaxa.value)  || 1;
-  const tipoGlobal = DOM.selTipo ? DOM.selTipo.value : 'PA/Insumo';
+  let sumProd = 0, sumBC = 0, sumICMS = 0, sumIPI = 0;
 
-  function normPct(v) {
-    const n = parseFloat(v);
-    if (isNaN(n) || n === 0) return 0;
-    return n > 1 ? n / 100 : n;
-  }
-
-  let sumTotalProd = 0, sumBC = 0, sumVlIcms = 0, sumVlIpi = 0;
-
-  trs.forEach(tr => {
-    const id  = parseInt(tr.dataset.id);
-    const ref = AppState.data.find(d => d._id === id);
-    if (!ref) return;
-
-    // ── Qtd NF-e (vem do XML, coluna estática) ──
-    const qNfe = parseFloat(ref['Qtd']) || 1;
-
-    // ── Fator: derivado de inp-qtd-ped (editável) ──
-    const qtdPedEl = tr.querySelector('.inp-qtd-ped');
-    const qtdPed   = qtdPedEl ? (parseFloat(qtdPedEl.value) || qNfe) : qNfe;
-    const fator    = qtdPed / qNfe;          // fator real = qtdPed / qtdNfe
-
-    // ── PIS por linha (placeholder = global) ──
-    const pisEl   = tr.querySelector('.inp-pis');
-    const pisVal  = pisEl && pisEl.value.trim() !== '' ? parseFloat(pisEl.value) : null;
-    const pisRate = pisVal !== null && !isNaN(pisVal) ? pisVal / 100 : pisGlobal;
-
-    // ── Taxa por linha (placeholder = global) ──
-    const taxaEl  = tr.querySelector('.inp-taxa-row');
-    const taxaVal = taxaEl && taxaEl.value.trim() !== '' ? parseFloat(taxaEl.value) : null;
-    const taxa    = taxaVal !== null && !isNaN(taxaVal) ? taxaVal : taxaGlobal;
-
-    // ── Tipo por linha ──
-    const tipoEl = tr.querySelector('.inp-tipo');
-    const tipo   = tipoEl ? tipoEl.value : tipoGlobal;
-
-    // ── Percentuais do XML (fixos) ──
-    const vUnit  = parseFloat(ref['Vl Unit']) || 0;
-    const pICMS  = normPct(ref['% ICMS']);
-    const pIPI   = normPct(ref['% IPI']);
-    const pRedBC = normPct(ref['% Red BC']);
-    const pICMS_ef = pICMS * (1 - pRedBC);
-
-    // ── Espelho exato de calcular_linha() ──
-    const vUnitPed = vUnit / fator;   // preço ajustado pelo fator
-
-    let BC, vIPI_linha, vICMS_linha, totalProd;
-
-    if (tipo === 'Ativo/Consumo') {
-      BC           = vUnitPed * (1 + pIPI);   // BC unitário
-      vIPI_linha   = vUnitPed * pIPI  * qtdPed;
-      vICMS_linha  = BC * pICMS_ef    * qtdPed;
-      BC           = BC * qtdPed;             // BC total
-      totalProd    = vUnitPed * qtdPed;
-    } else {
-      BC           = vUnitPed * qtdPed;
-      vIPI_linha   = 0;
-      vICMS_linha  = BC * pICMS_ef;
-      totalProd    = BC;
-    }
-
-    sumTotalProd += totalProd;
-    sumBC        += BC;
-    sumVlIcms    += vICMS_linha;
-    sumVlIpi     += vIPI_linha;
+  data.forEach(r => {
+    sumProd  += parseFloat(r['Total Produto Adj']) || 0;
+    sumBC    += parseFloat(r['BC ICMS Adj'])       || 0;
+    sumICMS  += parseFloat(r['Vl ICMS Adj'])       || 0;
+    sumIPI   += parseFloat(r['Vl IPI Adj'])        || 0;
   });
 
-  if (badge) badge.textContent = trs.length + (trs.length === 1 ? ' item' : ' itens');
-  _setResumoKpi('rkpi-total-prod-val', sumTotalProd);
-  _setResumoKpi('rkpi-bc-icms-val',    sumBC);
-  _setResumoKpi('rkpi-vl-icms-val',    sumVlIcms);
-  _setResumoKpi('rkpi-vl-ipi-val',     sumVlIpi);
+  if (badge) badge.textContent = data.length + (data.length === 1 ? ' item' : ' itens');
+  _setResumoKpi('rkpi-total-prod-val', sumProd);
+  _setResumoKpi('rkpi-bc-icms-val',   sumBC);
+  _setResumoKpi('rkpi-vl-icms-val',   sumICMS);
+  _setResumoKpi('rkpi-vl-ipi-val',    sumIPI);
 }
 
 function _setResumoKpi(id, val) {

@@ -252,13 +252,28 @@ def calcular_linha(row: dict, pis_rate_global: float, taxa_global: float, tipo_g
     vUnit_brl   = vUnit / taxa if taxa != 0 else vUnit
     preco_total = preco_liq * mult
 
+    # Campos ajustados para os cards do Resumo (SAP)
+    total_prod_adj = vUnit_ped * qtd_pedido
+    if tipo == 'Ativo/Consumo':
+        bc_adj      = vUnit_ped * (1 + pIPI) * qtd_pedido
+        vl_ipi_adj  = vUnit_ped * pIPI * qtd_pedido
+        vl_icms_adj = vUnit_ped * (1 + pIPI) * pICMS_ef * qtd_pedido
+    else:
+        bc_adj      = vUnit_ped * qtd_pedido
+        vl_ipi_adj  = 0.0
+        vl_icms_adj = bc_adj * pICMS_ef
+
     return {
-        'Qtd Pedido':     round(qtd_pedido, 2),
-        'Vl Unit BRL':    round(vUnit_brl,  2),
-        'Vl Unit Pedido': round(vUnit_ped,  2),
-        'Vl PIS+COFINS':  round(vPisCofins, 2),
-        'Preço Líq PC':   round(preco_liq,  2),
-        'Preço Líq Total':round(preco_total,2),
+        'Qtd Pedido':        round(qtd_pedido,     2),
+        'Vl Unit BRL':       round(vUnit_brl,      2),
+        'Vl Unit Pedido':    round(vUnit_ped,      2),
+        'Vl PIS+COFINS':     round(vPisCofins,     2),
+        'Preço Líq PC':      round(preco_liq,      2),
+        'Preço Líq Total':   round(preco_total,    2),
+        'Total Produto Adj': round(total_prod_adj, 2),
+        'BC ICMS Adj':       round(bc_adj,         2),
+        'Vl ICMS Adj':       round(vl_icms_adj,    2),
+        'Vl IPI Adj':        round(vl_ipi_adj,     2),
     }
 
 
