@@ -2866,17 +2866,16 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
     const alerts = [];
 
     // ── 1. PIS/COFINS ──────────────────────────────────────────────────────────
-    // "Valor Pis/Cofins" do documento = src['Vl PIS+COFINS'] (calculado no recalc).
-    // "% PIS+COF" efetivo = campo individual da linha SE preenchido,
-    //   caso contrário usa o valor GLOBAL do sidebar (inp-pis).
-    // Isso evita falso-positivo quando o item usa o PIS global (campo individual = null).
-    const vlPisCofins   = parseFloat(src['Vl PIS+COFINS'] || 0);
-    const pisIndividual = src['% PIS+COFINS'];   // null = item usa global
+    // pisNoDoc  = planilha PC tem valor de PIS/COFINS > 0  (campo retornado pelo backend)
+    // pisEfetivo = % PIS individual da linha OU global do sidebar (Edição de Fatores)
+    // Alerta apenas quando um lado tem e o outro não tem.
+    const vlPisCofinsPC = parseFloat(r['Vl PIS+COFINS PC'] ?? 0);
+    const pisIndividual = src['% PIS+COFINS'];
     const pisGlobal     = parseFloat(document.getElementById('inp-pis')?.value || 0);
     const pisEfetivo    = (pisIndividual != null) ? parseFloat(pisIndividual) : pisGlobal;
 
     const pisConfigurado = pisEfetivo > 0;
-    const pisNoDoc       = vlPisCofins > 0.005;
+    const pisNoDoc       = vlPisCofinsPC > 0.005;
 
     if (pisNoDoc && !pisConfigurado) {
       alerts.push({ cls: 'pis', icon: 'P', msg: 'Existe incidência de PIS/COFINS no documento, porém não configurado na Edição de Fatores.' });

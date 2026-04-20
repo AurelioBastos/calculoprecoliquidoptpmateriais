@@ -401,6 +401,8 @@ async def confronto_pc(
         "ncm": {"ncm"},
         "origem": {"origem", "orig"},
         "aliq_red_bc": {"aliqredbicms", "redbc", "reducaobc", "aliqredbc"},
+        "vl_pis_cofins": {"valorpiscofins", "vlpiscofins", "piscofins", "valpiscofins",
+                          "valorpis", "vlpis", "pisecofins", "pisecof"},
     }
 
     # Minimo para confrontar: chave e valor liquido.
@@ -452,6 +454,14 @@ async def confronto_pc(
             h = _find_contains("aliq", "st", "icms")
             if h:
                 resolved["aliq_st_icms"] = h
+        if "vl_pis_cofins" not in resolved:
+            h = _find_contains("pis", "cofins")
+            if h:
+                resolved["vl_pis_cofins"] = h
+        if "vl_pis_cofins" not in resolved:
+            h = _find_contains("pis")
+            if h:
+                resolved["vl_pis_cofins"] = h
         return resolved
 
     # Tenta diferentes abas e linhas de cabecalho para CADA arquivo enviado
@@ -772,6 +782,12 @@ async def confronto_pc(
             else:
                 st_red, xr, pr = 'N/A', safe_pct(row.get('% Red BC')), None
 
+            # Lê Vl PIS/COFINS da planilha PC (opcional)
+            vl_pis_pc = 0.0
+            if "vl_pis_cofins" in best_map:
+                pc_pis = pc[best_map["vl_pis_cofins"]]
+                vl_pis_pc = _to_num(pc_pis) if pd.notna(pc_pis) else 0.0
+
             result.append({**base,
                 'Vl Líq Unit PC': round(vl_pc, 2), 'Dif. Vl Unit': dif_vl,
                 'Lim. Tolerância': round(lim_tol,2), 'Status Dif.': st_dif,
@@ -781,6 +797,7 @@ async def confronto_pc(
                 'NCM PC': ncm_pc, 'Status NCM': st_ncm,
                 'Origem PC': orig_pc, 'Status Origem': st_orig,
                 'Aliq.Red.B.ICMS': pr, 'Status Red BC': st_red,
+                'Vl PIS+COFINS PC': round(vl_pis_pc, 4),
                 # aliases para frontend legado
                 'Orig XML': base.get('Origem XML'),
                 'Orig PC': orig_pc,
@@ -798,6 +815,7 @@ async def confronto_pc(
                 'NCM PC': None, 'Status NCM': 'SEM MATCH',
                 'Origem PC': None, 'Status Origem': 'SEM MATCH',
                 'Aliq.Red.B.ICMS': None,
+                'Vl PIS+COFINS PC': None,
                 # aliases para frontend legado
                 'Orig XML': base.get('Origem XML'),
                 'Orig PC': None,
