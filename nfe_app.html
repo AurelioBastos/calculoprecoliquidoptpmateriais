@@ -2109,10 +2109,7 @@ DOM.btnRecalc.addEventListener('click', async () => {
     const id = parseInt(tr.dataset.id);
     const ref = AppState.data.find(d => d._id === id);
     if(ref){
-      // inp-fator é readonly; calcula fator a partir da qtd do pedido
-      const qtdPedVal = parseFloat(tr.querySelector('.inp-qtd-ped').value);
-      const qtdNfeVal = parseFloat(ref['Qtd']) || 1;
-      ref['Fator Conv.']   = (qtdPedVal > 0) ? Math.round((qtdPedVal / qtdNfeVal) * 100000) / 100000 : (parseFloat(tr.querySelector('.inp-fator').value) || 1);
+      ref['Fator Conv.']   = parseFloat(tr.querySelector('.inp-fator').value) || 1;
       ref['Multiplicador'] = parseFloat(tr.querySelector('.inp-mult').value)  || 1;
       const pisRaw = tr.querySelector('.inp-pis').value;
       ref['% PIS+COFINS']  = (pisRaw !== '' && pisRaw !== null) ? parseFloat(pisRaw) : null;
@@ -2276,8 +2273,6 @@ function renderEditorTable() {
       if(tdMiro) tdMiro.textContent = 'R$ ' + formatBR(novoVlLiqMiro);
     });
   });
-
-
 }
 
 /* 
@@ -3722,32 +3717,86 @@ DOM.btnExportConfronto.addEventListener('click', async () => {
    ────────────────────────────────────────────────────────────── */
 
 function updateResumoAjustado() {
-  // Soma os campos calculados pelo backend em calcular_linha()
-  // Esses campos chegam em AppState.data após callRecalc()
-  const data  = AppState.data;
-  const badge = document.getElementById('resumo-accordion-badge');
-
+  const data = AppState.data;
   if (!data || !data.length) {
+    const badge = document.getElementById('resumo-accordion-badge');
     if (badge) badge.textContent = '0 itens';
-    ['rkpi-total-prod-val','rkpi-bc-icms-val','rkpi-vl-icms-val','rkpi-vl-ipi-val']
-      .forEach(id => _setResumoKpi(id, 0));
+    _setResumoKpi('rkpi-total-prod-val', 0);
+    _setResumoKpi('rkpi-bc-icms-val', 0);
+    _setResumoKpi('rkpi-vl-icms-val', 0);
+    _setResumoKpi('rkpi-vl-ipi-val', 0);
     return;
   }
 
-  let sumProd = 0, sumBC = 0, sumICMS = 0, sumIPI = 0;
+  const pisGlobal  = (parseFloat(DOM.inpPis.value)  || 0) / 100;
+  const taxaGlobal = parseFloat(DOM.inpTaxa.value)  || 1;
+  const tipoGlobal = DOM.selTipo ? DOM.selTipo.value : 'PA/Insumo';
+
+  let sumTotalProd = 0;
+  let sumBcIcms    = 0;
+  let sumVlIcms    = 0;
+  let sumVlIpi     = 0;
 
   data.forEach(r => {
-    sumProd  += parseFloat(r['Total Produto Adj']) || 0;
-    sumBC    += parseFloat(r['BC ICMS Adj'])       || 0;
-    sumICMS  += parseFloat(r['Vl ICMS Adj'])       || 0;
-    sumIPI   += parseFloat(r['Vl IPI Adj'])        || 0;
+    // ---------- resolve per-row overrides (sem multiplicador) ----------
+    const fator  = parseFloat(r['Fator Conv.'])  || 1;
+    const qNfe   = parseFloat(r['Qtd'])          || 1;
+    const qtdPed = qNfe * fator;
+
+    const taxaRow = r['Taxa Câmbio'] != null ? parseFloat(r['Taxa Câmbio']) : null;
+    const taxa    = (taxaRow !== null && !isNaN(taxaRow)) ? taxaRow : taxaGlobal;
+
+    const pisRowRaw = r['% PIS+COFINS'];
+    const pisRate   = (pisRowRaw !== null && pisRowRaw !== undefined && pisRowRaw !== '')
+                      ? parseFloat(pisRowRaw) / 100
+                      : pisGlobal;
+
+    const tipo = r['Tipo Material'] || tipoGlobal;
+
+    const vUnit   = parseFloat(r['Vl Unit']) || 0;
+    const vUnitPed = vUnit / fator;           // preço unitário no pedido
+
+    // norm % field (pode vir como 12 ou 0.12)
+    function normPct(v) {
+      const n = parseFloat(v) || 0;
+      return n > 1 ? n / 100 : n;
+    }
+
+    const pICMS  = normPct(r['% ICMS']);
+    const pIPI   = normPct(r['% IPI']);
+    const pRedBC = normPct(r['% Red BC']);
+    const pICMS_ef = pICMS * (1 - pRedBC);
+
+    // ---------- calcular totais por linha ----------
+    let totalProd, BC, vICMS, vIPI;
+
+    if (tipo === 'Ativo/Consumo') {
+      totalProd = vUnitPed * qtdPed;
+      BC        = vUnitPed * (1 + pIPI);          // BC unitário
+      vIPI      = vUnitPed * pIPI * qtdPed;
+      vICMS     = BC * pICMS_ef * qtdPed;
+      BC        = BC * qtdPed;                     // BC total
+    } else {
+      totalProd = vUnitPed * qtdPed;
+      BC        = vUnitPed * qtdPed;
+      vIPI      = 0;
+      vICMS     = BC * pICMS_ef;
+    }
+
+    sumTotalProd += totalProd;
+    sumBcIcms    += BC;
+    sumVlIcms    += vICMS;
+    sumVlIpi     += vIPI;
   });
 
-  if (badge) badge.textContent = data.length + (data.length === 1 ? ' item' : ' itens');
-  _setResumoKpi('rkpi-total-prod-val', sumProd);
-  _setResumoKpi('rkpi-bc-icms-val',   sumBC);
-  _setResumoKpi('rkpi-vl-icms-val',   sumICMS);
-  _setResumoKpi('rkpi-vl-ipi-val',    sumIPI);
+  // ---------- update DOM ----------
+  const badge = document.getElementById('resumo-accordion-badge');
+  if (badge) badge.textContent = data.length + ' ' + (data.length === 1 ? 'item' : 'itens');
+
+  _setResumoKpi('rkpi-total-prod-val', sumTotalProd);
+  _setResumoKpi('rkpi-bc-icms-val',    sumBcIcms);
+  _setResumoKpi('rkpi-vl-icms-val',    sumVlIcms);
+  _setResumoKpi('rkpi-vl-ipi-val',     sumVlIpi);
 }
 
 function _setResumoKpi(id, val) {

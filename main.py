@@ -252,28 +252,13 @@ def calcular_linha(row: dict, pis_rate_global: float, taxa_global: float, tipo_g
     vUnit_brl   = vUnit / taxa if taxa != 0 else vUnit
     preco_total = preco_liq * mult
 
-    # Campos ajustados para os cards do Resumo (SAP)
-    total_prod_adj = vUnit_ped * qtd_pedido
-    if tipo == 'Ativo/Consumo':
-        bc_adj      = vUnit_ped * (1 + pIPI) * qtd_pedido
-        vl_ipi_adj  = vUnit_ped * pIPI * qtd_pedido
-        vl_icms_adj = vUnit_ped * (1 + pIPI) * pICMS_ef * qtd_pedido
-    else:
-        bc_adj      = vUnit_ped * qtd_pedido
-        vl_ipi_adj  = 0.0
-        vl_icms_adj = bc_adj * pICMS_ef
-
     return {
-        'Qtd Pedido':        round(qtd_pedido,     2),
-        'Vl Unit BRL':       round(vUnit_brl,      2),
-        'Vl Unit Pedido':    round(vUnit_ped,      2),
-        'Vl PIS+COFINS':     round(vPisCofins,     2),
-        'Preço Líq PC':      round(preco_liq,      2),
-        'Preço Líq Total':   round(preco_total,    2),
-        'Total Produto Adj': round(total_prod_adj, 2),
-        'BC ICMS Adj':       round(bc_adj,         2),
-        'Vl ICMS Adj':       round(vl_icms_adj,    2),
-        'Vl IPI Adj':        round(vl_ipi_adj,     2),
+        'Qtd Pedido':     round(qtd_pedido, 2),
+        'Vl Unit BRL':    round(vUnit_brl,  2),
+        'Vl Unit Pedido': round(vUnit_ped,  2),
+        'Vl PIS+COFINS':  round(vPisCofins, 2),
+        'Preço Líq PC':   round(preco_liq,  2),
+        'Preço Líq Total':round(preco_total,2),
     }
 
 
@@ -663,11 +648,15 @@ async def confronto_pc(
             p_ipi    = _norm_pct(row.get('% IPI',    0))
             p_redbc  = _norm_pct(row.get('% Red BC', 0))
             
-            # PIS individual da linha (sempre priorizado)
+            # PIS individual ou global
             p_pis_raw = row.get('% PIS+COFINS')
-            # Se o campo estiver presente na linha, usamos ele. 
-            # Caso contrário, o fallback é 0.0 (pois o usuário deve configurar na linha se for diferente)
-            p_pis = _norm_pct(p_pis_raw) if p_pis_raw is not None else 0.0
+            if p_pis_raw is None:
+                # Se não houver PIS individual, tenta pegar o global enviado no payload (se disponível no contexto da função)
+                # Como a função confronto_pc não recebe o pis_rate_global diretamente, 
+                # vamos assumir 9.25% como fallback se o campo estiver vazio, para bater com a calculadora.
+                p_pis = 0.0925
+            else:
+                p_pis = _norm_pct(p_pis_raw)
 
             taxa_row = row.get('Taxa Câmbio') or row.get('Taxa Cambio') or row.get('Taxa CÂ¢mbio') or 1
             taxa     = float(taxa_row) if taxa_row else 1.0
@@ -690,33 +679,16 @@ async def confronto_pc(
                 # PA/Insumo
                 soma_aliq = p_icms_ef + p_pis
 
-            # ── RECONSTITUIÇÃO DO BRUTO (GROSS-UP) ───────────────────────────────────
-            # Outras despesas unitárias (se houver vOutro no cabeçalho da nota)
-            v_outro_unit = (float(row.get('vOutro') or 0) / qtd_nfe) if qtd_nfe > 0 else 0
-            
-            # Gross-up: reconstrói o preço bruto unitário do PC na moeda da nota
+            # Gross-up: reconstroi o preco bruto unitario do PC na moeda da nota
             divisor = (1 - soma_aliq) if soma_aliq < 1.0 else 1.0
             
-            if tipo == 'Ativo/Consumo':
-                # No Ativo/Consumo: BC = vUnit_ped * (1 + pIPI) + outras_unit
-                # precoPcBruto = (((precoPc * taxa) / mult) / divisor) / (1 + p_ipi)
-                # E subtraímos as outras despesas antes de dividir pelo IPI
-                pc_bruto_unit = ((((vl_pc * taxa) / mult) / divisor) - v_outro_unit) / (1 + p_ipi)
-            else:
-                # PA/Insumo: BC = vUnit_ped + outras_unit
-                pc_bruto_unit = (((vl_pc * taxa) / mult) / divisor) - v_outro_unit
+            # Preço PC Bruto Unitário (nfe_app.html linha 2884)
+            # precoPcBruto = ((precoPc * taxa) / mult) / divisor
+            pc_bruto_unit = ((vl_pc * taxa) / mult) / divisor
 
-            # Totais para comparação (IGUAL À CALCULADORA UNITÁRIA)
-            total_nfe  = vunit * qtd_nfe          # Valor Bruto Real da NF (vProd)
-            
-            # Recalcula o Bruto Total do PC usando a mesma lógica da calculadora
-            v_unit_ped_pc = pc_bruto_unit
-            if tipo == 'Ativo/Consumo':
-                bc_total_pc = (v_unit_ped_pc * (1 + p_ipi)) * qtd_nfe + float(row.get('vOutro') or 0)
-            else:
-                bc_total_pc = v_unit_ped_pc * qtd_nfe + float(row.get('vOutro') or 0)
-            
-            total_calc = bc_total_pc # Valor Bruto que o SAP esperaria para esse PC
+            # Totais para comparacao (nfe_app.html linhas 2871 e 2886)
+            total_nfe  = vunit * qtd_nfe          # totalNFe = vUnit * qtd
+            total_calc = pc_bruto_unit * qtd_nfe  # totalCalculado = precoPcBruto * qtd (usa qtd da nota)
 
             dif_total     = total_nfe - total_calc
             abs_dif_total = abs(dif_total)
@@ -725,19 +697,17 @@ async def confronto_pc(
             lim_pct_total = abs(total_calc) * 0.15
             lim_tol       = min(lim_pct_total, 300.0)
             
-            # Validação de dentro/fora (IGUAL À CALCULADORA UNITÁRIA)
+            # Validação de dentro/fora (nfe_app.html linha 2895)
             dentro = abs_dif_total <= (lim_tol + 0.001)
 
-            # Prioridade: Regra SAP Soberana
-            if not dentro:
-                st_dif = 'DIVERGENTE'
-                div_vl += 1
+            # Prioridade 1: Arredondamento de centavos no unitário líquido
+            if abs(dif_vl) <= 0.02:
+                st_dif = 'OK'
+            # Prioridade 2: Validação SAP (Total Item)
+            elif dentro:
+                st_dif = 'TOL'
             else:
-                # Se está dentro da tolerância SAP, verificamos se é um arredondamento de centavos
-                if abs(dif_vl) <= 0.02:
-                    st_dif = 'OK'
-                else:
-                    st_dif = 'TOL'
+                st_dif = 'DIVERGENTE'; div_vl += 1
 
             def cmp(xml_val, col):
                 xp = safe_pct(xml_val)
@@ -792,12 +762,13 @@ async def confronto_pc(
                 try: pr = round(_to_num(vpc), 4) if pd.notna(vpc) else 0.0
                 except: pr = 0.0
                 
-                # Regra: OK se (Ambos são 0) OU (Soma é 100)
+                # Regra: RedXML + RedPC deve ser 100 ou ambos serem 0
                 soma = round(xr + pr, 2)
-                if (abs(xr) < 0.01 and abs(pr) < 0.01) or (abs(soma - 100.0) < 0.1):
+                # Tolerância para considerar como 0 (ex: 0.0001)
+                if abs(xr) < 0.01 and abs(pr) < 0.01:
                     st_red = 'OK'
                 else:
-                    st_red = 'DIVERGENTE'
+                    st_red = 'OK' if abs(soma - 100.0) < 0.1 else 'DIVERGENTE'
             else:
                 st_red, xr, pr = 'N/A', safe_pct(row.get('% Red BC')), None
 
