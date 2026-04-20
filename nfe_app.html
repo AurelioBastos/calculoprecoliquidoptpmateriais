@@ -2338,6 +2338,10 @@ function renderEditorTable() {
       const novoVlLiqMiro = precoLiq * qtdPed;
       const tdMiro = tr.querySelector('td.td-vl-liq-miro');
       if(tdMiro) tdMiro.textContent = 'R$ ' + formatBR(novoVlLiqMiro);
+      // Atualiza AppState imediatamente para _cfAlertas ler o valor novo
+      if(ref) ref['Qtd Pedido'] = qtdPed;
+      // Re-renderiza Confronto PC se já tiver dados → alerta Q some/aparece em tempo real
+      if(AppState.confrontoData.length) renderConfrontoTable();
     });
   });
 }
@@ -2902,13 +2906,24 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
     }
 
     // ── 3. QUANTIDADE ──────────────────────────────────────────────────────────
-    // Compara Quantidade da planilha PC (r['Qtd PC'], retornado pelo backend)
-    // com a Quantidade da NF-e (src['Qtd']).
-    // Divergência real: PC tem quantidade diferente do que veio na nota.
+    // Compara Quantidade da planilha PC (r['Qtd PC']) com a Quantidade da NF-e (src['Qtd']).
+    // Se o usuário já ajustou a Qtd Pedido na Edição de Fatores para bater com o PC,
+    // o alerta some — indica que o fator de conversão já foi corrigido.
+    // Lê o valor atual do input da Edição diretamente da DOM (tempo real, sem precisar de Recalcular).
     const qtdNFe    = parseFloat(src['Qtd'] || 0);
     const qtdPC     = r['Qtd PC'] != null ? parseFloat(r['Qtd PC']) : null;
     if (qtdNFe > 0 && qtdPC != null && Math.abs(qtdNFe - qtdPC) > 0.0001) {
-      alerts.push({ cls: 'qty', icon: 'Q', msg: `Quantidade divergente. Verificar possível fator de conversão ou inconsistência no pedido. (NF-e: ${qtdNFe} · PC: ${qtdPC})` });
+      // Tenta ler Qtd Pedido atual do input da Edição de Fatores (DOM) — mais preciso que AppState
+      let qtdPedAtual = parseFloat(src['Qtd Pedido'] || 0);
+      const editorTr = DOM.wrapEditor.querySelector(`tr[data-id="${r._id}"]`);
+      if (editorTr) {
+        const inpQtdPed = editorTr.querySelector('.inp-qtd-ped');
+        if (inpQtdPed) qtdPedAtual = parseFloat(inpQtdPed.value) || qtdPedAtual;
+      }
+      const edicaoJaAjustada = qtdPedAtual > 0 && Math.abs(qtdPedAtual - qtdPC) <= 0.0001;
+      if (!edicaoJaAjustada) {
+        alerts.push({ cls: 'qty', icon: 'Q', msg: `Quantidade divergente. Verificar possível fator de conversão ou inconsistência no pedido. (NF-e: ${qtdNFe} · PC: ${qtdPC})` });
+      }
     }
 
     if (!alerts.length) return '';
