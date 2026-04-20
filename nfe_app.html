@@ -2866,15 +2866,16 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
     const alerts = [];
 
     // ── 1. PIS/COFINS ──────────────────────────────────────────────────────────
-    // "Valor Pis/Cofins" do upload = r['Vl PIS+COFINS'] (calculado no recalc).
-    // "% PIS+COF" da Edição Fatores = src['% PIS+COFINS'] (individual) ou
-    //   fallback do campo global se null (para comparação, consideramos 0 = não configurado).
-    const vlPisCofins = parseFloat(src['Vl PIS+COFINS'] || 0);
-    const pisFatores  = src['% PIS+COFINS'];   // null = usa global
-    const pisCfg      = pisFatores != null ? parseFloat(pisFatores) : null; // null = não individualizado
+    // "Valor Pis/Cofins" do documento = src['Vl PIS+COFINS'] (calculado no recalc).
+    // "% PIS+COF" efetivo = campo individual da linha SE preenchido,
+    //   caso contrário usa o valor GLOBAL do sidebar (inp-pis).
+    // Isso evita falso-positivo quando o item usa o PIS global (campo individual = null).
+    const vlPisCofins   = parseFloat(src['Vl PIS+COFINS'] || 0);
+    const pisIndividual = src['% PIS+COFINS'];   // null = item usa global
+    const pisGlobal     = parseFloat(document.getElementById('inp-pis')?.value || 0);
+    const pisEfetivo    = (pisIndividual != null) ? parseFloat(pisIndividual) : pisGlobal;
 
-    // Considera "configurado na Edição de Fatores" apenas se % PIS individual > 0
-    const pisConfigurado = pisCfg != null && pisCfg > 0;
+    const pisConfigurado = pisEfetivo > 0;
     const pisNoDoc       = vlPisCofins > 0.005;
 
     if (pisNoDoc && !pisConfigurado) {
