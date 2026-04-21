@@ -2343,9 +2343,12 @@ function renderEditorTable() {
       const novoVlLiqMiro = precoLiqUnitMiro * qtdPed;
       const tdMiro = tr.querySelector('td.td-vl-liq-miro');
       if(tdMiro) tdMiro.textContent = 'R$ ' + formatBR(novoVlLiqMiro);
-      // Atualiza AppState imediatamente para _cfAlertas ler o valor novo
-      if(ref) ref['Qtd Pedido'] = qtdPed;
-      // Re-renderiza Confronto PC se já tiver dados → alerta Q some/aparece em tempo real
+      // Atualiza AppState imediatamente — _cfAlertas lê daqui via _id
+      if(ref) {
+        ref['Qtd Pedido'] = qtdPed;
+        ref['Fator Conv.'] = novoFator;
+      }
+      // Re-renderiza Confronto PC se já tiver dados → alerta Q some em tempo real
       if(AppState.confrontoData.length) renderConfrontoTable();
     });
   });
@@ -2883,7 +2886,9 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
   // Gera HTML dos alertas de PIS, Multiplicador e Quantidade para uma linha.
   // Compara confrontoData (resultado do confronto) com AppState.data (Edição Fatores).
   function _cfAlertas(r) {
-    const src = AppState.data.find(d => d._id === r._id) || {};
+    // Garante comparação numérica de _id (pode vir como string do JSON)
+    const _rid = typeof r._id === 'string' ? parseInt(r._id, 10) : r._id;
+    const src = AppState.data.find(d => d._id === _rid || d._id === r._id) || {};
     const alerts = [];
 
     // ── 1. PIS/COFINS ──────────────────────────────────────────────────────────
@@ -2921,19 +2926,13 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
 
     // ── 3. QUANTIDADE ──────────────────────────────────────────────────────────
     // Compara Quantidade da planilha PC (r['Qtd PC']) com a Quantidade da NF-e (src['Qtd']).
-    // Se o usuário já ajustou a Qtd Pedido na Edição de Fatores para bater com o PC,
-    // o alerta some — indica que o fator de conversão já foi corrigido.
-    // Lê o valor atual do input da Edição diretamente da DOM (tempo real, sem precisar de Recalcular).
+    // O alerta some quando a Qtd Pedido no AppState já foi atualizada para bater com o PC
+    // (o listener inp-qtd-ped atualiza src['Qtd Pedido'] antes de chamar renderConfrontoTable).
     const qtdNFe    = parseFloat(src['Qtd'] || 0);
     const qtdPC     = r['Qtd PC'] != null ? parseFloat(r['Qtd PC']) : null;
     if (qtdNFe > 0 && qtdPC != null && Math.abs(qtdNFe - qtdPC) > 0.0001) {
-      // Tenta ler Qtd Pedido atual do input da Edição de Fatores (DOM) — mais preciso que AppState
-      let qtdPedAtual = parseFloat(src['Qtd Pedido'] || 0);
-      const editorTr = DOM.wrapEditor.querySelector(`tr[data-id="${r._id}"]`);
-      if (editorTr) {
-        const inpQtdPed = editorTr.querySelector('.inp-qtd-ped');
-        if (inpQtdPed) qtdPedAtual = parseFloat(inpQtdPed.value) || qtdPedAtual;
-      }
+      // Usa exclusivamente AppState — já atualizado pelo listener antes deste render
+      const qtdPedAtual = parseFloat(src['Qtd Pedido'] || 0);
       const edicaoJaAjustada = qtdPedAtual > 0 && Math.abs(qtdPedAtual - qtdPC) <= 0.0001;
       if (!edicaoJaAjustada) {
         alerts.push({ cls: 'qty', icon: 'Q', msg: `Quantidade divergente. Verificar possível fator de conversão ou inconsistência no pedido. (NF-e: ${qtdNFe} · PC: ${qtdPC})` });
