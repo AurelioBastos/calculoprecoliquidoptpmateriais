@@ -1872,86 +1872,34 @@ function _sefazUF(chave44) {
 // Consulta a SEFAZ via webservice público (NFeConsultaProtocolo4)
 // Usa o serviço de consulta SEFAZ Virtual (SVRS/SVCAN) como fallback universal
 async function consultarSEFAZ(chave44) {
-  if (!chave44 || chave44.length !== 44) return { status: 'erro', msg: 'Chave inválida', cStat: null };
-
-  const uf = _sefazUF(chave44);
-  const amb = _sefazAmbiente(chave44);
-
-  // Usamos um proxy CORS público para contornar CORS do webservice SEFAZ
-  // A consulta usa o endpoint de consulta de situação cadastral via chave
-  // Como navegadores bloqueiam SOAP direto, usamos a API pública de consulta
-  // disponível via https://receitaws.com.br / publica.receita ou o proxy nfe.io
-  // Melhor opção sem backend: publica API da NFe.io ou monta envelope SOAP
-
-  // Monta envelope SOAP para NFeConsultaProtocolo4
-  const nfeMod = chave44.substring(20, 22); // modelo: 55=NF-e, 65=NFC-e
-  const modelo = nfeMod === '65' ? '65' : '55';
-
-  // URL do SVRS (Receita/SEFAZ Virtual) – aceita qualquer UF
-  const ambPath = amb === 'homologacao' ? 'NFeConsultaProtocolo4H' : 'NFeConsultaProtocolo4';
-  // UFs com servidor próprio (SVSP para SP, SVRS para demais)
-  const useSVSP = uf === 'SP' || uf === 'MG' || uf === 'PR' || uf === 'RS' || uf === 'MT';
-  const baseURL = useSVSP
-    ? `https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx`
-    : `https://nfe.svrs.fazenda.gov.br/ws/NfeConsulta/NfeConsulta4.asmx`;
-
-  const soapEnv = `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-  xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Header>
-    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">
-      <cUF>${chave44.substring(0,2)}</cUF>
-      <versaoDados>4.00</versaoDados>
-    </nfeCabecMsg>
-  </soap12:Header>
-  <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">
-      <consSitNFe versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
-        <tpAmb>${amb === 'homologacao' ? '2' : '1'}</tpAmb>
-        <xServ>CONSULTAR</xServ>
-        <chNFe>${chave44}</chNFe>
-      </consSitNFe>
-    </nfeDadosMsg>
-  </soap12:Body>
-</soap12:Envelope>`;
-
-  // Proxy CORS via allorigins.win para contornar bloqueio CORS dos webservices SEFAZ
-  const proxyURL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(baseURL);
-
+  if (!chave44 || chave44.length !== 44) {
+    return { status: 'erro', label: '⚠ Chave?', msg: 'Chave de acesso inválida ou ausente no XML', cStat: null };
+  }
   try {
-    const res = await fetch(proxyURL, {
+    const res = await fetch(`${API}/sefaz-consulta`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/soap+xml; charset=utf-8',
-        'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4/nfeConsultaNF',
-      },
-      body: soapEnv,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chave: chave44 }),
     });
-
-    const txt = await res.text();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(txt, 'application/xml');
-
-    // Extrai cStat e xMotivo da resposta
-    const cStatEl = xml.querySelector('cStat');
-    const xMotivoEl = xml.querySelector('xMotivo');
-    const cStat = cStatEl ? cStatEl.textContent.trim() : null;
-    const xMotivo = xMotivoEl ? xMotivoEl.textContent.trim() : 'Sem resposta';
-
-    if (!cStat) return { status: 'erro', msg: 'Sem resposta SEFAZ', cStat: null };
-
+    if (!res.ok) {
+      const err = await res.text();
+      return { status: 'erro', label: '⚠ Erro', msg: `Backend retornou ${res.status}: ${err.slice(0,120)}`, cStat: null };
+    }
+    const json = await res.json();
+    const cStat   = String(json.cStat || '');
+    const xMotivo = json.xMotivo || 'Sem resposta';
     return {
       status: _sefazStatusClass(cStat),
-      label: _sefazStatusLabel(cStat, xMotivo),
-      msg: `cStat ${cStat}: ${xMotivo}`,
+      label:  _sefazStatusLabel(cStat, xMotivo),
+      msg:    `cStat ${cStat}: ${xMotivo}`,
       cStat,
       xMotivo,
     };
   } catch(e) {
-    return { status: 'erro', msg: 'Falha na consulta: ' + e.message, cStat: null };
+    return { status: 'erro', label: '⚠ Erro', msg: 'Falha ao contactar backend: ' + e.message, cStat: null };
   }
 }
+
 
 // Atualiza o badge SEFAZ de um item da lista de histórico
 function _setSefazBadge(li, result) {
