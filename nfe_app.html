@@ -942,15 +942,15 @@ select.ie{width:118px;cursor:pointer;padding-right:20px}
 .cf-alert.pis  { background: rgba(242,184,75,.22); color: #f2b84b; border: 1px solid rgba(242,184,75,.5); }
 .cf-alert.mult { background: rgba(246,106,106,.18); color: #f66a6a; border: 1px solid rgba(246,106,106,.45); }
 .cf-alert.qty  { background: rgba(121,168,255,.18); color: #93b4ff; border: 1px solid rgba(121,168,255,.45); }
-.cf-alert .cf-tooltip {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-  position: absolute;
-  bottom: calc(100% + 9px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 300px;
+html.light .cf-alert.pis  { background: rgba(212,144,10,.12); color: #a06800; border-color: rgba(212,144,10,.4); }
+html.light .cf-alert.mult { background: rgba(217,54,62,.10);  color: #b91c1c; border-color: rgba(217,54,62,.35); }
+html.light .cf-alert.qty  { background: rgba(60,100,220,.10); color: #3b5fc0; border-color: rgba(60,100,220,.35); }
+
+/* Global fixed tooltip — injected by JS, escapes overflow:hidden */
+#cf-global-tip {
+  position: fixed;
+  z-index: 99999;
+  max-width: 300px;
   background: #071d12;
   border: 1px solid rgba(121,227,159,.3);
   border-radius: 11px;
@@ -961,15 +961,16 @@ select.ie{width:118px;cursor:pointer;padding-right:20px}
   color: var(--txt-1);
   line-height: 1.6;
   white-space: pre-line;
-  z-index: 9999;
   box-shadow: 0 12px 32px rgba(0,0,0,.6);
-  transition: opacity .18s ease, visibility .18s ease;
-  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .18s ease;
 }
-.cf-alert.pis .cf-tooltip  { border-color: rgba(242,184,75,.45); }
-.cf-alert.mult .cf-tooltip { border-color: rgba(246,106,106,.45); }
-.cf-alert.qty .cf-tooltip  { border-color: rgba(121,168,255,.45); }
-.cf-alert .cf-tooltip::after {
+#cf-global-tip.show { opacity: 1; }
+#cf-global-tip.tip-pis  { border-color: rgba(242,184,75,.55); }
+#cf-global-tip.tip-mult { border-color: rgba(246,106,106,.55); }
+#cf-global-tip.tip-qty  { border-color: rgba(121,168,255,.55); }
+#cf-global-tip::after {
   content: '';
   position: absolute;
   top: 100%;
@@ -978,23 +979,10 @@ select.ie{width:118px;cursor:pointer;padding-right:20px}
   border: 6px solid transparent;
   border-top-color: rgba(121,227,159,.3);
 }
-.cf-alert.pis .cf-tooltip::after  { border-top-color: rgba(242,184,75,.45); }
-.cf-alert.mult .cf-tooltip::after { border-top-color: rgba(246,106,106,.45); }
-.cf-alert.qty .cf-tooltip::after  { border-top-color: rgba(121,168,255,.45); }
-.cf-alert:hover .cf-tooltip {
-  visibility: visible;
-  opacity: 1;
-}
-html.light .cf-alert.pis  { background: rgba(212,144,10,.12); color: #a06800; border-color: rgba(212,144,10,.4); }
-html.light .cf-alert.mult { background: rgba(217,54,62,.10);  color: #b91c1c; border-color: rgba(217,54,62,.35); }
-html.light .cf-alert.qty  { background: rgba(60,100,220,.10); color: #3b5fc0; border-color: rgba(60,100,220,.35); }
-html.light .cf-alert .cf-tooltip { background: #fff; border-color: var(--line); color: var(--txt-1); box-shadow: 0 8px 24px rgba(10,31,22,.15); }
-html.light .cf-alert.pis .cf-tooltip  { border-color: rgba(212,144,10,.4); }
-html.light .cf-alert.mult .cf-tooltip { border-color: rgba(217,54,62,.35); }
-html.light .cf-alert.qty .cf-tooltip  { border-color: rgba(60,100,220,.35); }
-html.light .cf-alert.pis .cf-tooltip::after  { border-top-color: rgba(212,144,10,.4); }
-html.light .cf-alert.mult .cf-tooltip::after { border-top-color: rgba(217,54,62,.35); }
-html.light .cf-alert.qty .cf-tooltip::after  { border-top-color: rgba(60,100,220,.35); }
+#cf-global-tip.tip-pis::after  { border-top-color: rgba(242,184,75,.55); }
+#cf-global-tip.tip-mult::after { border-top-color: rgba(246,106,106,.55); }
+#cf-global-tip.tip-qty::after  { border-top-color: rgba(121,168,255,.55); }
+html.light #cf-global-tip { background: #fff; border-color: var(--line); color: var(--txt-1); box-shadow: 0 8px 24px rgba(10,31,22,.18); }
 
 .th-highlight-liq{
   color:#fff !important;
@@ -2953,10 +2941,7 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
 
     if (!alerts.length) return '';
     const iconsHtml = alerts.map(a =>
-      `<span class="cf-alert ${a.cls}" aria-label="${a.msg}">
-        ${a.icon}
-        <span class="cf-tooltip">${a.msg}</span>
-      </span>`
+      `<span class="cf-alert ${a.cls}" data-tip="${a.msg.replace(/"/g,'&quot;').replace(/\n/g,'&#10;')}">${a.icon}</span>`
     ).join('');
     return iconsHtml;
   }
@@ -4037,5 +4022,56 @@ function _setResumoKpi(id, val) {
   </div>
 </div>
 
+
+<!-- GLOBAL FIXED TOOLTIP for cf-alert (escapes overflow:hidden containers) -->
+<div id="cf-global-tip"></div>
+<script>
+(function(){
+  const tip = document.getElementById('cf-global-tip');
+  let hideTimer;
+
+  document.addEventListener('mouseover', function(e){
+    const el = e.target.closest('.cf-alert[data-tip]');
+    if(!el) return;
+    clearTimeout(hideTimer);
+
+    const msg = el.getAttribute('data-tip').replace(/&#10;/g,'\n');
+    const cls = el.classList.contains('pis') ? 'tip-pis' : el.classList.contains('mult') ? 'tip-mult' : 'tip-qty';
+    tip.textContent = msg;
+    tip.className = cls;
+
+    const rect = el.getBoundingClientRect();
+    tip.style.visibility = 'hidden';
+    tip.style.display = 'block';
+    tip.classList.remove('show');
+
+    requestAnimationFrame(() => {
+      const tw = tip.offsetWidth;
+      const th = tip.offsetHeight;
+      let left = rect.left + rect.width/2 - tw/2;
+      let top  = rect.top - th - 10;
+
+      // Keep inside viewport horizontally
+      if(left < 8) left = 8;
+      if(left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+      // Flip below if not enough space above
+      if(top < 8) top = rect.bottom + 10;
+
+      tip.style.left = left + 'px';
+      tip.style.top  = top  + 'px';
+      tip.style.visibility = '';
+      tip.classList.add('show');
+    });
+  });
+
+  document.addEventListener('mouseout', function(e){
+    const el = e.target.closest('.cf-alert[data-tip]');
+    if(!el) return;
+    hideTimer = setTimeout(() => {
+      tip.classList.remove('show');
+    }, 120);
+  });
+})();
+</script>
 </body>
 </html>
