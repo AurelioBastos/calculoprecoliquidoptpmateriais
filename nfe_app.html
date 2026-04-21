@@ -947,33 +947,40 @@ select.ie{width:118px;cursor:pointer;padding-right:20px}
   opacity: 0;
   pointer-events: none;
   position: absolute;
-  bottom: calc(100% + 7px);
+  bottom: calc(100% + 9px);
   left: 50%;
   transform: translateX(-50%);
-  width: 260px;
-  background: #0b2416;
-  border: 1px solid rgba(121,227,159,.35);
-  border-radius: 9px;
-  padding: 9px 12px;
+  width: 300px;
+  background: #071d12;
+  border: 1px solid rgba(121,227,159,.3);
+  border-radius: 11px;
+  padding: 12px 14px;
   font-family: var(--font);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--txt-1);
-  line-height: 1.45;
-  white-space: normal;
-  z-index: 200;
-  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  line-height: 1.6;
+  white-space: pre-line;
+  z-index: 9999;
+  box-shadow: 0 12px 32px rgba(0,0,0,.6);
   transition: opacity .18s ease, visibility .18s ease;
+  text-align: left;
 }
+.cf-alert.pis .cf-tooltip  { border-color: rgba(242,184,75,.45); }
+.cf-alert.mult .cf-tooltip { border-color: rgba(246,106,106,.45); }
+.cf-alert.qty .cf-tooltip  { border-color: rgba(121,168,255,.45); }
 .cf-alert .cf-tooltip::after {
   content: '';
   position: absolute;
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: rgba(121,227,159,.35);
+  border: 6px solid transparent;
+  border-top-color: rgba(121,227,159,.3);
 }
+.cf-alert.pis .cf-tooltip::after  { border-top-color: rgba(242,184,75,.45); }
+.cf-alert.mult .cf-tooltip::after { border-top-color: rgba(246,106,106,.45); }
+.cf-alert.qty .cf-tooltip::after  { border-top-color: rgba(121,168,255,.45); }
 .cf-alert:hover .cf-tooltip {
   visibility: visible;
   opacity: 1;
@@ -981,8 +988,13 @@ select.ie{width:118px;cursor:pointer;padding-right:20px}
 html.light .cf-alert.pis  { background: rgba(212,144,10,.12); color: #a06800; border-color: rgba(212,144,10,.4); }
 html.light .cf-alert.mult { background: rgba(217,54,62,.10);  color: #b91c1c; border-color: rgba(217,54,62,.35); }
 html.light .cf-alert.qty  { background: rgba(60,100,220,.10); color: #3b5fc0; border-color: rgba(60,100,220,.35); }
-html.light .cf-alert .cf-tooltip { background: #fff; border-color: var(--line); color: var(--txt-1); box-shadow: 0 6px 18px rgba(10,31,22,.13); }
-html.light .cf-alert .cf-tooltip::after { border-top-color: var(--line); }
+html.light .cf-alert .cf-tooltip { background: #fff; border-color: var(--line); color: var(--txt-1); box-shadow: 0 8px 24px rgba(10,31,22,.15); }
+html.light .cf-alert.pis .cf-tooltip  { border-color: rgba(212,144,10,.4); }
+html.light .cf-alert.mult .cf-tooltip { border-color: rgba(217,54,62,.35); }
+html.light .cf-alert.qty .cf-tooltip  { border-color: rgba(60,100,220,.35); }
+html.light .cf-alert.pis .cf-tooltip::after  { border-top-color: rgba(212,144,10,.4); }
+html.light .cf-alert.mult .cf-tooltip::after { border-top-color: rgba(217,54,62,.35); }
+html.light .cf-alert.qty .cf-tooltip::after  { border-top-color: rgba(60,100,220,.35); }
 
 .th-highlight-liq{
   color:#fff !important;
@@ -2904,9 +2916,9 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
     const pisNoDoc       = vlPisCofinsPC > 0.005;
 
     if (pisNoDoc && !pisConfigurado) {
-      alerts.push({ cls: 'pis', icon: 'P', msg: 'Existe incidência de PIS/COFINS no documento, porém não configurado na Edição de Fatores.' });
+      alerts.push({ cls: 'pis', icon: 'P', msg: `⚠️ PIS/COFINS no documento, mas não configurado\n\nA NF-e possui valor de PIS/COFINS (R$ ${vlPisCofinsPC.toFixed(2).replace('.',',')}), porém o campo "% PIS+COFINS" na Edição de Fatores está zerado ou vazio.\n\n👉 Ação: Informe o percentual de PIS/COFINS na Edição de Fatores para que o cálculo do preço líquido seja correto.` });
     } else if (!pisNoDoc && pisConfigurado) {
-      alerts.push({ cls: 'pis', icon: 'P', msg: 'PIS/COFINS configurado na Edição de Fatores, porém não identificado no documento.' });
+      alerts.push({ cls: 'pis', icon: 'P', msg: `⚠️ PIS/COFINS configurado, mas ausente na NF-e\n\nO campo "% PIS+COFINS" (${pisEfetivo}%) está preenchido na Edição de Fatores, mas o documento não apresenta valor de PIS/COFINS.\n\n👉 Ação: Verifique se o percentual deve ser removido da Edição de Fatores, ou se a NF-e está incorreta.` });
     }
 
     // ── 2. MULTIPLICADOR ───────────────────────────────────────────────────────
@@ -2921,7 +2933,7 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
       if (inpMult) multFatores = parseFloat(inpMult.value) || multFatores;
     }
     if (porPC != null && Math.abs(multFatores - porPC) > 0.0001) {
-      alerts.push({ cls: 'mult', icon: 'M', msg: `Divergência no fator multiplicador. Validar possível diferença de conversão. (Edição Fatores: ×${multFatores} · PC Por: ×${porPC})` });
+      alerts.push({ cls: 'mult', icon: 'M', msg: `⚠️ Multiplicador divergente entre Edição de Fatores e PC\n\nEdição de Fatores: ×${multFatores}\nPC (campo "Por"): ×${porPC}\n\nEssa diferença pode causar erro no cálculo da quantidade e do preço líquido.\n\n👉 Ação: Ajuste o multiplicador na Edição de Fatores para ×${porPC} (valor do PC), ou confirme com o comprador qual valor é o correto.` });
     }
 
     // ── 3. QUANTIDADE ──────────────────────────────────────────────────────────
@@ -2935,7 +2947,7 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
       const qtdPedAtual = parseFloat(src['Qtd Pedido'] || 0);
       const edicaoJaAjustada = qtdPedAtual > 0 && Math.abs(qtdPedAtual - qtdPC) <= 0.0001;
       if (!edicaoJaAjustada) {
-        alerts.push({ cls: 'qty', icon: 'Q', msg: `Quantidade divergente. Verificar possível fator de conversão ou inconsistência no pedido. (NF-e: ${qtdNFe} · PC: ${qtdPC})` });
+        alerts.push({ cls: 'qty', icon: 'Q', msg: `⚠️ Quantidade divergente entre NF-e e PC\n\nQuantidade na NF-e: ${qtdNFe}\nQuantidade no PC: ${qtdPC}\n\nEssa diferença pode indicar um fator de conversão não configurado (ex: NF-e em KG, pedido em TON) ou uma inconsistência real no pedido.\n\n👉 Ação: Ajuste a "Qtd Pedido" na Edição de Fatores para ${qtdPC}, ou verifique o fator de conversão de unidade.` });
       }
     }
 
