@@ -1012,11 +1012,36 @@ html.light .td-highlight-liq{
 .row{display:flex;align-items:center;gap:8px}
 .spacer{flex:1}
 .xml-history{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
-.xml-history-list{list-style:none;max-height:120px;overflow-y:auto;margin-top:8px}
-.xml-history-item{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--txt-3);font-family:var(--mono);padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;transition:var(--ease);border-radius:6px}
+.xml-history-list{list-style:none;max-height:180px;overflow-y:auto;margin-top:8px}
+.xml-history-item{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--txt-3);font-family:var(--mono);padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;transition:var(--ease);border-radius:6px;flex-wrap:wrap}
 .xml-history-item:hover{background:rgba(44,207,102,0.1);color:var(--txt-1)}
 .xml-history-item span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .xml-history-item .status-dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+/* SEFAZ status badges */
+.sefaz-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-family:var(--mono);font-size:8px;font-weight:800;
+  padding:2px 6px;border-radius:20px;
+  white-space:nowrap;flex-shrink:0;letter-spacing:.04em;
+  text-transform:uppercase;cursor:default;
+}
+.sefaz-badge.verificando{background:rgba(121,168,255,.15);color:#93b4ff;border:1px solid rgba(121,168,255,.35);animation:sefaz-pulse 1.2s ease-in-out infinite}
+.sefaz-badge.autorizada{background:rgba(44,207,102,.15);color:var(--ok);border:1px solid rgba(44,207,102,.35)}
+.sefaz-badge.cancelada{background:rgba(242,184,75,.15);color:#f2b84b;border:1px solid rgba(242,184,75,.4)}
+.sefaz-badge.denegada{background:rgba(246,106,106,.15);color:var(--bad);border:1px solid rgba(246,106,106,.4)}
+.sefaz-badge.erro{background:rgba(150,150,150,.12);color:var(--txt-3);border:1px solid rgba(150,150,150,.25)}
+@keyframes sefaz-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.sefaz-badge .sefaz-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.sefaz-badge.verificando .sefaz-dot{background:#93b4ff}
+.sefaz-badge.autorizada .sefaz-dot{background:var(--ok)}
+.sefaz-badge.cancelada .sefaz-dot{background:#f2b84b}
+.sefaz-badge.denegada .sefaz-dot{background:var(--bad)}
+.sefaz-badge.erro .sefaz-dot{background:var(--txt-3)}
+html.light .sefaz-badge.verificando{background:rgba(60,100,220,.1);color:#3b5fc0;border-color:rgba(60,100,220,.3)}
+html.light .sefaz-badge.autorizada{background:rgba(16,134,71,.1);color:var(--hk-green-700);border-color:rgba(16,134,71,.3)}
+html.light .sefaz-badge.cancelada{background:rgba(212,144,10,.1);color:#92620a;border-color:rgba(212,144,10,.3)}
+html.light .sefaz-badge.denegada{background:rgba(217,54,62,.1);color:#b91c1c;border-color:rgba(217,54,62,.3)}
+html.light .sefaz-badge.erro{background:rgba(100,100,100,.08);color:var(--txt-3);border-color:rgba(100,100,100,.2)}
 .btn-outline-danger{background:transparent;border:1px solid rgba(246,106,106,0.3);color:var(--bad);margin-top:8px}
 .btn-outline-danger:hover:not(:disabled){background:rgba(246,106,106,0.1);border-color:var(--bad)}
 .persistent-history{margin-top:20px;border-top:2px solid var(--line);padding-top:16px}
@@ -1799,6 +1824,188 @@ DOM.dropZone.addEventListener('drop', e => {
 DOM.dropZone.addEventListener('click', () => DOM.uploadInput.click());
 DOM.uploadInput.addEventListener('change', e => { if(e.target.files.length) handleFiles(e.target.files); });
 
+/* ══════════════════════════════════════════════════════════════
+   SEFAZ – Validação de Status da NF-e (consulta pública)
+   ══════════════════════════════════════════════════════════════ */
+
+// cStat codes → status
+const SEFAZ_STATUS_MAP = {
+  '100': 'autorizada', // Uso Autorizado
+  '101': 'cancelada',  // Cancelamento Homologado
+  '110': 'denegada',   // Uso Denegado
+  '301': 'denegada',   // Irregularidade fiscal emitente
+  '302': 'denegada',   // Irregularidade fiscal destinatário
+  '303': 'denegada',   // Destinatário com IE suspensa
+};
+
+function _sefazStatusClass(cStat) {
+  return SEFAZ_STATUS_MAP[String(cStat)] || 'erro';
+}
+
+function _sefazStatusLabel(cStat, xMotivo) {
+  const s = String(cStat);
+  if (s === '100') return '✓ Autorizada';
+  if (s === '101') return '✗ Cancelada';
+  if (s === '110') return '✗ Denegada';
+  if (s.startsWith('3'))  return '✗ Denegada';
+  return `⚠ cStat ${cStat}`;
+}
+
+// Determina o ambiente (produção vs homologação) e UF pelo dígito da chave
+function _sefazAmbiente(chave44) {
+  // posição 20 da chave (0-indexed) = tpAmb: 1=produção, 2=homologação
+  const tpAmb = chave44.length === 44 ? chave44[20] : '1';
+  return tpAmb === '2' ? 'homologacao' : 'producao';
+}
+
+function _sefazUF(chave44) {
+  const cUF = chave44.substring(0, 2);
+  const ufs = {
+    '11':'RO','12':'AC','13':'AM','14':'RR','15':'PA','16':'AP','17':'TO',
+    '21':'MA','22':'PI','23':'CE','24':'RN','25':'PB','26':'PE','27':'AL',
+    '28':'SE','29':'BA','31':'MG','32':'ES','33':'RJ','35':'SP','41':'PR',
+    '42':'SC','43':'RS','50':'MS','51':'MT','52':'GO','53':'DF',
+  };
+  return ufs[cUF] || 'SP';
+}
+
+// Consulta a SEFAZ via webservice público (NFeConsultaProtocolo4)
+// Usa o serviço de consulta SEFAZ Virtual (SVRS/SVCAN) como fallback universal
+async function consultarSEFAZ(chave44) {
+  if (!chave44 || chave44.length !== 44) return { status: 'erro', msg: 'Chave inválida', cStat: null };
+
+  const uf = _sefazUF(chave44);
+  const amb = _sefazAmbiente(chave44);
+
+  // Usamos um proxy CORS público para contornar CORS do webservice SEFAZ
+  // A consulta usa o endpoint de consulta de situação cadastral via chave
+  // Como navegadores bloqueiam SOAP direto, usamos a API pública de consulta
+  // disponível via https://receitaws.com.br / publica.receita ou o proxy nfe.io
+  // Melhor opção sem backend: publica API da NFe.io ou monta envelope SOAP
+
+  // Monta envelope SOAP para NFeConsultaProtocolo4
+  const nfeMod = chave44.substring(20, 22); // modelo: 55=NF-e, 65=NFC-e
+  const modelo = nfeMod === '65' ? '65' : '55';
+
+  // URL do SVRS (Receita/SEFAZ Virtual) – aceita qualquer UF
+  const ambPath = amb === 'homologacao' ? 'NFeConsultaProtocolo4H' : 'NFeConsultaProtocolo4';
+  // UFs com servidor próprio (SVSP para SP, SVRS para demais)
+  const useSVSP = uf === 'SP' || uf === 'MG' || uf === 'PR' || uf === 'RS' || uf === 'MT';
+  const baseURL = useSVSP
+    ? `https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx`
+    : `https://nfe.svrs.fazenda.gov.br/ws/NfeConsulta/NfeConsulta4.asmx`;
+
+  const soapEnv = `<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Header>
+    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">
+      <cUF>${chave44.substring(0,2)}</cUF>
+      <versaoDados>4.00</versaoDados>
+    </nfeCabecMsg>
+  </soap12:Header>
+  <soap12:Body>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">
+      <consSitNFe versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
+        <tpAmb>${amb === 'homologacao' ? '2' : '1'}</tpAmb>
+        <xServ>CONSULTAR</xServ>
+        <chNFe>${chave44}</chNFe>
+      </consSitNFe>
+    </nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>`;
+
+  // Proxy CORS via allorigins.win para contornar bloqueio CORS dos webservices SEFAZ
+  const proxyURL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(baseURL);
+
+  try {
+    const res = await fetch(proxyURL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/soap+xml; charset=utf-8',
+        'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4/nfeConsultaNF',
+      },
+      body: soapEnv,
+    });
+
+    const txt = await res.text();
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(txt, 'application/xml');
+
+    // Extrai cStat e xMotivo da resposta
+    const cStatEl = xml.querySelector('cStat');
+    const xMotivoEl = xml.querySelector('xMotivo');
+    const cStat = cStatEl ? cStatEl.textContent.trim() : null;
+    const xMotivo = xMotivoEl ? xMotivoEl.textContent.trim() : 'Sem resposta';
+
+    if (!cStat) return { status: 'erro', msg: 'Sem resposta SEFAZ', cStat: null };
+
+    return {
+      status: _sefazStatusClass(cStat),
+      label: _sefazStatusLabel(cStat, xMotivo),
+      msg: `cStat ${cStat}: ${xMotivo}`,
+      cStat,
+      xMotivo,
+    };
+  } catch(e) {
+    return { status: 'erro', msg: 'Falha na consulta: ' + e.message, cStat: null };
+  }
+}
+
+// Atualiza o badge SEFAZ de um item da lista de histórico
+function _setSefazBadge(li, result) {
+  let badge = li.querySelector('.sefaz-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'sefaz-badge';
+    li.appendChild(badge);
+  }
+  badge.className = `sefaz-badge ${result.status}`;
+  badge.title = result.msg || '';
+  badge.innerHTML = `<span class="sefaz-dot"></span>${result.label || result.status}`;
+
+  // Atualiza também o status-dot da linha
+  const dot = li.querySelector('.status-dot');
+  if (dot) {
+    dot.style.background =
+      result.status === 'autorizada' ? 'var(--ok)' :
+      result.status === 'cancelada'  ? '#f2b84b' :
+      result.status === 'denegada'   ? 'var(--bad)' :
+      result.status === 'verificando'? '#93b4ff' : 'var(--txt-3)';
+  }
+}
+
+// Valida todos os XMLs do upload e exibe resultados nos itens do histórico
+async function validarXMLsNaSEFAZ(xmlInfos, listItems) {
+  for (let i = 0; i < xmlInfos.length; i++) {
+    const info = xmlInfos[i];
+    const li = listItems[i];
+    if (!li) continue;
+
+    const chave = info.chNFe;
+    if (!chave || chave.length !== 44) {
+      _setSefazBadge(li, { status: 'erro', msg: 'Chave de acesso não encontrada no XML', label: '⚠ Chave?' });
+      continue;
+    }
+
+    // Mostra "verificando"
+    _setSefazBadge(li, { status: 'verificando', msg: `Consultando SEFAZ... (${chave.substring(0,8)}...)`, label: 'Verificando' });
+
+    const result = await consultarSEFAZ(chave);
+    _setSefazBadge(li, result);
+
+    // Atualiza AppState com o status SEFAZ
+    AppState.data.forEach(r => {
+      if ((r['Chave NF-e'] || r['chNFe']) === chave) {
+        r['Status SEFAZ'] = result.status;
+        r['xMotivo SEFAZ'] = result.xMotivo || result.msg;
+        r['cStat SEFAZ'] = result.cStat;
+      }
+    });
+  }
+}
+
 function handleFiles(files) {
   const xml = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.xml'));
   if(!xml.length){ alert('Selecione apenas arquivos XML.'); return; }
@@ -1946,6 +2153,15 @@ DOM.btnProcessar.addEventListener('click', async () => {
     AppState.data = await enrichDataWithXmlFields(AppState.files, AppState.data);
     console.log("DEBUG - Dados após enriquecimento client-side:", AppState.data[0]);
 
+    // ── VALIDAÇÃO SEFAZ (roda em background após enriquecimento) ──
+    // Coleta infos XML e itens DOM do histórico para atualizar badges
+    const _xmlInfosForSefaz = [];
+    for (const file of AppState.files) {
+      const text = await file.text();
+      _xmlInfosForSefaz.push(parseXmlClientSide(text));
+    }
+    // badges serão preenchidos após renderizar a lista — chamado abaixo
+
     // Preenchimento automático do Gerador de Divergências (usa a primeira NF encontrada apenas para o modal)
     if (AppState.data.length > 0) {
       const primeiraComNF = AppState.data.find(r => r['NÂº NF'] || r['NF'] || r['nNF'] || r['NFe'] || r['Número NF'] || r['Numero NF'] || r['Nota']) || {};
@@ -1971,23 +2187,24 @@ DOM.btnProcessar.addEventListener('click', async () => {
 
     // Atualiza Histórico da Sessão
     DOM.xmlHistoryList.innerHTML = '';
-    AppState.files.forEach(f => {
+    const _sefazListItems = []; // referências DOM para atualizar badges SEFAZ
+    AppState.files.forEach((f, fi) => {
       const li = document.createElement('div');
       li.className = 'xml-history-item';
-      // Tenta extrair o número da NF do nome do arquivo ou dos dados
       const fileName = f.name;
-      li.innerHTML = `<div class="status-dot"></div><span>${fileName}</span>`;
-      li.title = "Clique para localizar itens desta NF no Editor";
-      
+      const chaveInfo = _xmlInfosForSefaz[fi] || {};
+      const chaveShort = chaveInfo.chNFe ? chaveInfo.chNFe.substring(0,8) + '...' : '';
+      const nfNum = chaveInfo.nNF ? ` · NF ${chaveInfo.nNF}` : '';
+      li.innerHTML = `
+        <div class="status-dot"></div>
+        <span title="${chaveInfo.chNFe || ''}">${fileName}${nfNum}</span>
+        <span class="sefaz-badge verificando" title="Consultando SEFAZ..."><span class="sefaz-dot"></span>Verificando</span>
+      `;
+      li.title = chaveInfo.chNFe ? `Chave: ${chaveInfo.chNFe}` : "Clique para localizar no Editor";
+
       li.onclick = () => {
-        // Alterna para a aba Editor
         DOM.tabs.forEach(t => t.classList.toggle('active', t.dataset.target === 'panel-editor'));
         DOM.panes.forEach(p => p.classList.toggle('active', p.id === 'panel-editor'));
-        
-        // Localiza a NF correspondente a este arquivo nos dados
-        // O enrichDataWithXmlFields associa nNF ao objeto. Vamos tentar achar a nNF no texto do arquivo ou por índice.
-        // Como processamos os arquivos em ordem, podemos tentar um mapeamento simples.
-        // Uma forma mais segura é buscar por texto no nome do arquivo que combine com a coluna NF da tabela.
         const rows = DOM.wrapEditor.querySelectorAll('tbody tr');
         let found = false;
         rows.forEach(tr => {
@@ -1999,12 +2216,10 @@ DOM.btnProcessar.addEventListener('click', async () => {
             found = true;
           }
         });
-        if(!found) {
-           // Se não achou pelo nome, tenta o primeiro item que encontrar (fallback)
-           console.log("NF não localizada exatamente pelo nome do arquivo.");
-        }
+        if(!found) console.log("NF não localizada exatamente pelo nome do arquivo.");
       };
       DOM.xmlHistoryList.appendChild(li);
+      _sefazListItems.push(li);
     });
     DOM.xmlHistorySec.style.display = 'block';
     DOM.btnLimparTudo.style.display = 'block';
@@ -2014,6 +2229,9 @@ DOM.btnProcessar.addEventListener('click', async () => {
     // Altera para a aba Editor automaticamente
     DOM.tabs.forEach(t => t.classList.toggle('active', t.dataset.target === 'panel-editor'));
     DOM.panes.forEach(p => p.classList.toggle('active', p.id === 'panel-editor'));
+
+    // ── Inicia validação SEFAZ em background (não bloqueia UI) ──
+    validarXMLsNaSEFAZ(_xmlInfosForSefaz, _sefazListItems);
     
     DOM.btnProcessar.disabled = true;
     DOM.btnProcessar.textContent = 'Processado';
