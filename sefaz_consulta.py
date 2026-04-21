@@ -219,7 +219,7 @@ async def sefaz_consulta(req: SefazConsultaRequest):
     }
 
     try:
-        async with httpx.AsyncClient(timeout=15.0, verify=True) as client:
+        async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
             response = await client.post(url, content=soap_body, headers=headers)
             response.raise_for_status()
     except httpx.TimeoutException:
