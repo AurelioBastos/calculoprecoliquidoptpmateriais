@@ -405,6 +405,7 @@ async def confronto_pc(
                           "valorpis", "vlpis", "pisecofins", "pisecof"},
         "quantidade_pc": {"quantidade", "qtd", "qty", "quant", "quantidadepedido",
                           "qtdpedido", "qtdpc"},
+        "por_pc": {"por", "fatorconversao", "fatorconv", "conv", "fator"},
     }
 
     # Minimo para confrontar: chave e valor liquido.
@@ -472,6 +473,10 @@ async def confronto_pc(
             h = _find_contains("qtd")
             if h:
                 resolved["quantidade_pc"] = h
+        if "por_pc" not in resolved:
+            h = _find_contains("por")
+            if h:
+                resolved["por_pc"] = h
         return resolved
 
     # Tenta diferentes abas e linhas de cabecalho para CADA arquivo enviado
@@ -804,6 +809,12 @@ async def confronto_pc(
                 pc_qtd = pc[best_map["quantidade_pc"]]
                 qtd_pc = _to_num(pc_qtd) if pd.notna(pc_qtd) else None
 
+            # Lê Por (fator multiplicador) da planilha PC (opcional)
+            por_pc = None
+            if "por_pc" in best_map:
+                pc_por = pc[best_map["por_pc"]]
+                por_pc = _to_num(pc_por) if pd.notna(pc_por) else None
+
             result.append({**base,
                 'Vl Líq Unit PC': round(vl_pc, 2), 'Dif. Vl Unit': dif_vl,
                 'Lim. Tolerância': round(lim_tol,2), 'Status Dif.': st_dif,
@@ -815,6 +826,7 @@ async def confronto_pc(
                 'Aliq.Red.B.ICMS': pr, 'Status Red BC': st_red,
                 'Vl PIS+COFINS PC': round(vl_pis_pc, 4),
                 'Qtd PC': qtd_pc,
+                'Por PC': por_pc,
                 # aliases para frontend legado
                 'Orig XML': base.get('Origem XML'),
                 'Orig PC': orig_pc,
@@ -834,6 +846,7 @@ async def confronto_pc(
                 'Aliq.Red.B.ICMS': None,
                 'Vl PIS+COFINS PC': None,
                 'Qtd PC': None,
+                'Por PC': None,
                 # aliases para frontend legado
                 'Orig XML': base.get('Origem XML'),
                 'Orig PC': None,

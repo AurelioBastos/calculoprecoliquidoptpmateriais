@@ -2294,7 +2294,10 @@ function renderEditorTable() {
     
     const descricao = r['Descrição'] ?? r['Descri\u00e7\u00e3o'] ?? r['Descricao'] ?? '';
     const precoLiq = r['Preço Líq Total'] ?? r['Pre\u00e7o L\u00edq Total'] ?? r['Preco Liq Total'] ?? 0;
-    const vlLiqMiro = precoLiq * qtdPed;
+    // VL Liq MIRO = Preço Líq Unitário (sem Mult.) × Qtd Pedido
+    // 'Preço Líq PC' é o unitário sem multiplicador; caso ausente divide pelo Mult.
+    const precoLiqUnit = r['Preço Líq PC'] ?? r['Preço Líq PC'] ?? r['Preco Liq PC'] ?? (precoLiq / (parseFloat(r['Multiplicador']) || 1));
+    const vlLiqMiro = precoLiqUnit * qtdPed;
     h += `<tr data-id="${r._id}">
       <td class="muted" style="font-weight:bold">${nf}</td>
       <td class="muted" style="font-weight:bold">${codProd}</td>
@@ -2335,12 +2338,26 @@ function renderEditorTable() {
       const precoLiq = parseFloat(
         ref?.['Pre\u00e7o L\u00edq Total'] ?? ref?.['Preco Liq Total'] ?? 0
       );
-      const novoVlLiqMiro = precoLiq * qtdPed;
+      // VL Liq MIRO unitário (sem Mult.) × nova Qtd Pedido
+      const precoLiqUnitMiro = ref?.['Preço Líq PC'] ?? ref?.['Preco Liq PC'] ?? (precoLiq / (parseFloat(ref?.['Multiplicador']) || 1));
+      const novoVlLiqMiro = precoLiqUnitMiro * qtdPed;
       const tdMiro = tr.querySelector('td.td-vl-liq-miro');
       if(tdMiro) tdMiro.textContent = 'R$ ' + formatBR(novoVlLiqMiro);
       // Atualiza AppState imediatamente para _cfAlertas ler o valor novo
       if(ref) ref['Qtd Pedido'] = qtdPed;
       // Re-renderiza Confronto PC se já tiver dados → alerta Q some/aparece em tempo real
+      if(AppState.confrontoData.length) renderConfrontoTable();
+    });
+  });
+
+  // Ao mudar Mult. → re-renderiza Confronto para alerta M sumir/aparecer em tempo real
+  DOM.wrapEditor.querySelectorAll('.inp-mult').forEach(inp => {
+    inp.addEventListener('change', function(){
+      const tr  = this.closest('tr');
+      const id  = parseInt(tr.dataset.id);
+      const ref = AppState.data.find(d => d._id === id);
+      const novoMult = parseFloat(this.value) || 1;
+      if(ref) ref['Multiplicador'] = novoMult;
       if(AppState.confrontoData.length) renderConfrontoTable();
     });
   });
@@ -2888,21 +2905,18 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
     }
 
     // ── 2. MULTIPLICADOR ───────────────────────────────────────────────────────
-    // "Mult." da Edição Fatores = src['Multiplicador'].
-    // "Por" do upload = coluna de conversão da planilha PC.
-    // O PC é enviado ao backend e não temos o campo "Por" de volta no confrontoData,
-    // mas temos o Preço Líquido calculado e o do PC. Para a validação do multiplicador,
-    // usamos src['Multiplicador'] (Edição Fatores) vs. o multiplicador implícito do PC.
-    // Como o campo "Por" do PC não retorna no payload, usamos Mult. da Edição vs. Mult. padrão=1.
-    // Nota: quando o PC tem "Por" != Mult, a diferença já apareceria no Status Dif.
-    // A validação aqui é: se Mult. da Edição != 1 mas Status = OK, pode haver coincidência — alertamos somente se Mult != 1.
-    // Implementação conservadora: alerta quando Multiplicador da Edição Fatores difere de 1,
-    // pois indica uma conversão que pode não estar presente no PC.
-    const multFatores = parseFloat(src['Multiplicador'] || 1);
-    const multDoc     = parseFloat(r['_mult_pc'] || 1); // campo reservado; será 1 se não vier
-    // Compara mult da Edição com 1 (padrão PC). Se diferente de 1, emite alerta descritivo.
-    if (Math.abs(multFatores - 1) > 0.0001) {
-      alerts.push({ cls: 'mult', icon: 'M', msg: `Divergência no fator multiplicador. Validar possível diferença de conversão. (Edição Fatores: ×${multFatores})` });
+    // Compara "Por" da planilha PC (r['Por PC']) com "Mult." da Edição de Fatores.
+    // Lê o valor atual do input da Edição diretamente da DOM para sumir em tempo real.
+    const porPC       = r['Por PC'] != null ? parseFloat(r['Por PC']) : null;
+    let multFatores   = parseFloat(src['Multiplicador'] || 1);
+    // Lê Mult. atual do input da Edição (tempo real)
+    const editorTrM = DOM.wrapEditor.querySelector(`tr[data-id="${r._id}"]`);
+    if (editorTrM) {
+      const inpMult = editorTrM.querySelector('.inp-mult');
+      if (inpMult) multFatores = parseFloat(inpMult.value) || multFatores;
+    }
+    if (porPC != null && Math.abs(multFatores - porPC) > 0.0001) {
+      alerts.push({ cls: 'mult', icon: 'M', msg: `Divergência no fator multiplicador. Validar possível diferença de conversão. (Edição Fatores: ×${multFatores} · PC Por: ×${porPC})` });
     }
 
     // ── 3. QUANTIDADE ──────────────────────────────────────────────────────────
