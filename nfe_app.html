@@ -1871,7 +1871,7 @@ function _sefazUF(chave44) {
 
 // Consulta a SEFAZ via webservice público (NFeConsultaProtocolo4)
 // Usa o serviço de consulta SEFAZ Virtual (SVRS/SVCAN) como fallback universal
-async function consultarSEFAZ(chave44) {
+async function consultarSEFAZ(chave44, xmlContent = '') {
   if (!chave44 || chave44.length !== 44) {
     return { status: 'erro', label: '⚠ Chave?', msg: 'Chave de acesso inválida ou ausente no XML', cStat: null };
   }
@@ -1879,7 +1879,7 @@ async function consultarSEFAZ(chave44) {
     const res = await fetch(`${API}/sefaz-consulta`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chave: chave44 }),
+      body: JSON.stringify({ chave: chave44, xml_content: xmlContent }),
     });
     if (!res.ok) {
       const err = await res.text();
@@ -1924,7 +1924,7 @@ function _setSefazBadge(li, result) {
   }
 }
 
-// Valida todos os XMLs do upload e exibe resultados nos itens do histórico
+// Valida todos os XMLs do upload lendo o protocolo diretamente do XML
 async function validarXMLsNaSEFAZ(xmlInfos, listItems) {
   for (let i = 0; i < xmlInfos.length; i++) {
     const info = xmlInfos[i];
@@ -1937,10 +1937,11 @@ async function validarXMLsNaSEFAZ(xmlInfos, listItems) {
       continue;
     }
 
-    // Mostra "verificando"
-    _setSefazBadge(li, { status: 'verificando', msg: `Consultando SEFAZ... (${chave.substring(0,8)}...)`, label: 'Verificando' });
+    _setSefazBadge(li, { status: 'verificando', msg: `Lendo protocolo do XML...`, label: 'Verificando' });
 
-    const result = await consultarSEFAZ(chave);
+    // Lê o conteúdo raw do arquivo XML para enviar ao backend
+    const xmlText = info.rawText || '';
+    const result = await consultarSEFAZ(chave, xmlText);
     _setSefazBadge(li, result);
 
     // Atualiza AppState com o status SEFAZ
@@ -2106,7 +2107,9 @@ DOM.btnProcessar.addEventListener('click', async () => {
     const _xmlInfosForSefaz = [];
     for (const file of AppState.files) {
       const text = await file.text();
-      _xmlInfosForSefaz.push(parseXmlClientSide(text));
+      const info = parseXmlClientSide(text);
+      info.rawText = text; // inclui o XML completo para validação do protocolo
+      _xmlInfosForSefaz.push(info);
     }
     // badges serão preenchidos após renderizar a lista — chamado abaixo
 
