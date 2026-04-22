@@ -1799,9 +1799,6 @@ DOM.dropZone.addEventListener('drop', e => {
 DOM.dropZone.addEventListener('click', () => DOM.uploadInput.click());
 DOM.uploadInput.addEventListener('change', e => { if(e.target.files.length) handleFiles(e.target.files); });
 
-/* ══════════════════════════════════════════════════════════════
-}
-
 function handleFiles(files) {
   const xml = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.xml'));
   if(!xml.length){ alert('Selecione apenas arquivos XML.'); return; }
