@@ -2,7 +2,7 @@
 NF-e Preço Líquido — Backend FastAPI
 Serve o frontend estático + processa XMLs em memória (sem persistência).
 """
-import os, re, json
+import os, re, json, asyncio
 import unicodedata
 from io import BytesIO
 from typing import Any, List
@@ -376,10 +376,8 @@ async def confronto_pc(
     pc_file: List[UploadFile] = File(...),
     data:    str              = Form(...),
 ):
-    # Lê todos os arquivos enviados
-    all_contents = []
-    for f in pc_file:
-        all_contents.append(await f.read())
+    # Lê todos os arquivos em paralelo (asyncio.gather)
+    all_contents = await asyncio.gather(*[f.read() for f in pc_file])
 
     def _norm_col(v: Any) -> str:
         s = str(v or "").strip()
@@ -486,7 +484,11 @@ async def confronto_pc(
     last_err = None
 
     def _best_df_from_content(content: bytes):
-        """Retorna (df, col_map) com melhor aba/header para um arquivo."""
+        """Retorna (df, col_map) com melhor aba/header para um arquivo.
+        
+        Otimização: lê cada aba UMA VEZ sem header e desloca o header
+        manualmente — elimina até 120 releituras de BytesIO por aba.
+        """
         b_df = None
         b_map: dict[str, str] = {}
         b_score = -1
@@ -498,25 +500,48 @@ async def confronto_pc(
             sheet_names = [0]
 
         for sheet in sheet_names:
-            for header_row in range(0, 121):
+            try:
+                # Lê a aba inteira sem header (raw) — apenas uma leitura por aba
+                raw = pd.read_excel(BytesIO(content), sheet_name=sheet, header=None)
+            except Exception as e:
+                b_err = e
+                continue
+
+            max_header = min(120, len(raw) - 1)
+            for header_row in range(0, max_header + 1):
                 try:
-                    probe = pd.read_excel(BytesIO(content), sheet_name=sheet, header=header_row)
-                    probe.columns = probe.columns.astype(str).str.strip()
+                    # Usa as linhas já em memória, sem reler o arquivo
+                    probe = raw.iloc[header_row + 1:].copy()
+                    probe.columns = raw.iloc[header_row].astype(str).str.strip()
+                    probe = probe.reset_index(drop=True)
                     cmap = _resolve_cols(probe)
                     score = len(cmap)
-                    if score == b_score and b_df is not None:
-                        if len(probe.dropna(how="all")) <= len(b_df.dropna(how="all")):
-                            continue
-                    if score > b_score or (score == b_score and b_df is not None and len(probe.dropna(how="all")) > len(b_df.dropna(how="all"))):
+                    rows_count = len(probe.dropna(how="all"))
+                    if score > b_score or (score == b_score and b_df is not None and rows_count > len(b_df.dropna(how="all"))):
                         b_score = score
                         b_df = probe
                         b_map = cmap
+                        # Early exit: se já encontrou todas as colunas possíveis, para
+                        if score >= len(aliases):
+                            break
                 except Exception as e:
                     b_err = e
+            # Se já atingiu score máximo nesta aba, não precisa testar outras
+            if b_score >= len(aliases):
+                break
         return b_df, b_map, b_err
 
-    for content in all_contents:
-        df_i, map_i, err_i = _best_df_from_content(content)
+    # Processa cada arquivo em paralelo usando thread pool (parsing Excel é CPU-bound)
+    loop = asyncio.get_event_loop()
+    results_parallel = await asyncio.gather(
+        *[loop.run_in_executor(None, _best_df_from_content, c) for c in all_contents],
+        return_exceptions=True,
+    )
+    for res in results_parallel:
+        if isinstance(res, Exception):
+            last_err = res
+            continue
+        df_i, map_i, err_i = res
         if df_i is None:
             last_err = err_i
             continue
@@ -607,6 +632,7 @@ async def confronto_pc(
     rows = json.loads(data)
     result = []
 
+    # ── Helpers definidos FORA do loop (evita redefinição por iteração) ──────
     def _to_num(v: Any) -> float:
         if v is None:
             return 0.0
@@ -623,6 +649,11 @@ async def confronto_pc(
     def safe_pct(v):
         f = _to_num(v)
         return round(f * 100, 4) if f <= 1.0 else round(f, 4)
+
+    def _norm_pct(v):
+        """Garante que o valor seja uma alíquota decimal (0-1)."""
+        f = float(v) if v else 0.0
+        return f / 100.0 if f > 1.0 else f
 
     div_vl = div_icms = div_ipi = div_st = div_ncm = div_orig = sem_match = matches = 0
 
@@ -663,11 +694,6 @@ async def confronto_pc(
             #   total_calc  = pc_bruto x qtd_ped     <- bruto reconstituido do PC
             #   lim_tol     = min(15% x |total_calc|, 300)
             # ───────────────────────────────────────────────────────────────────────────
-
-            def _norm_pct(v):
-                """Garante que o valor seja uma aliquota decimal (0-1)."""
-                f = float(v) if v else 0.0
-                return f / 100.0 if f > 1.0 else f
 
             p_icms   = _norm_pct(row.get('% ICMS',   0))
             p_ipi    = _norm_pct(row.get('% IPI',    0))
@@ -737,9 +763,11 @@ async def confronto_pc(
             def cmp(xml_val, col):
                 xp = safe_pct(xml_val)
                 vpc = pc[col]
-                try: pp = round(_to_num(vpc), 4) if pd.notna(vpc) else 0.0
-                except: pp = 0.0
-                return ('OK' if abs(xp-pp)<0.0001 else 'DIVERGENTE'), xp, pp
+                try:
+                    pp = round(_to_num(vpc), 4) if pd.notna(vpc) else 0.0
+                except Exception:
+                    pp = 0.0
+                return ('OK' if abs(xp - pp) < 0.0001 else 'DIVERGENTE'), xp, pp
 
             if "aliq_icms" in best_map:
                 st_icms, xi, pi_ = cmp(row.get('% ICMS'), best_map["aliq_icms"])
