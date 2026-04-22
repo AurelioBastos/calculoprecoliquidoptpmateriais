@@ -18,10 +18,6 @@ from pydantic import BaseModel
 
 app = FastAPI(title="NF-e Preço Líquido")
 
-# ── SEFAZ consulta ──
-from sefaz_consulta import router as sefaz_router
-app.include_router(sefaz_router)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
