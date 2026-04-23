@@ -237,7 +237,8 @@ def calcular_linha(row: dict, pis_rate_global: float, taxa_global: float, tipo_g
     pICMS  = norm(row.get('% ICMS'))
     pIPI   = norm(row.get('% IPI'))
     pRedBC = norm(row.get('% Red BC'))
-    pICMS_ef = pICMS * (1 - pRedBC)
+    pDif   = norm(row.get('% Dif. ICMS'))   # diferimento parcial ICMS (ex: 38,46%)
+    pICMS_ef = pICMS * (1 - pRedBC) * (1 - pDif)
 
     if tipo == 'Ativo/Consumo':
         BC          = vUnit_ped * (1 + pIPI)
