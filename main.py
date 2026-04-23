@@ -664,11 +664,15 @@ async def confronto_pc(
 
     for row in rows:
         chave = str(row.get('Ped-Item', '')).strip()
+        # Alíquota efetiva do ICMS: aplica redução do pDif (diferimento parcial) se existir
+        _p_icms_nominal = _norm_pct(row.get('% ICMS', 0))
+        _p_dif          = _norm_pct(row.get('% Dif. ICMS', 0))
+        _p_icms_ef      = _p_icms_nominal * (1 - _p_dif)   # ex: 19,5% × (1-38,46%) = 12%
         base = {
             '_id': row.get('_id'),
             'Descrição':  row.get('Descrição',''),
             'Ped-Item':   chave,
-            'ICMS XML (%)': safe_pct(row.get('% ICMS')),
+            'ICMS XML (%)': safe_pct(_p_icms_ef),
             'IPI XML (%)':  safe_pct(row.get('% IPI')),
             'ICMS-ST XML (%)': safe_pct(row.get('% ICMS-ST')),
             'NCM XML':    str(row.get('NCM','')).strip().replace('.',''),
@@ -775,10 +779,10 @@ async def confronto_pc(
                 return ('OK' if abs(xp - pp) < 0.0001 else 'DIVERGENTE'), xp, pp
 
             if "aliq_icms" in best_map:
-                st_icms, xi, pi_ = cmp(row.get('% ICMS'), best_map["aliq_icms"])
+                st_icms, xi, pi_ = cmp(_p_icms_ef, best_map["aliq_icms"])
                 if st_icms != 'OK': div_icms += 1
             else:
-                st_icms, xi, pi_ = 'N/A', safe_pct(row.get('% ICMS')), None
+                st_icms, xi, pi_ = 'N/A', safe_pct(_p_icms_ef), None
 
             if "aliq_ipi" in best_map:
                 st_ipi, xi2, pi2 = cmp(row.get('% IPI'), best_map["aliq_ipi"])
