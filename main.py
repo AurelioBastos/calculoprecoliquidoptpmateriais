@@ -262,7 +262,7 @@ def calcular_linha(row: dict, pis_rate_global: float, taxa_global: float, tipo_g
         'Vl Unit BRL':    round(vUnit_brl,  2),
         'Vl Unit Pedido': round(vUnit_ped,  2),
         'Vl PIS+COFINS':  round(vPisCofins, 2),
-        'Preço Líq PC':   round(preco_liq,  2),
+        'Preço Líq PC':   round(preco_liq,  5),
         'Preço Líq Total':round(preco_total,2),
     }
 
