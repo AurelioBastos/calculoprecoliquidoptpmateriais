@@ -2443,6 +2443,7 @@ function renderEditorTable() {
   let h = `<table class="dt"><thead><tr>
     <th>NF</th><th>Cod Prod</th><th>Descricao</th><th class="r">Qtd NF-e</th>
     <th class="r">Vl Unit</th><th class="r">% ICMS</th><th class="r">% IPI</th>
+    <th class="r" title="Diferimento parcial ICMS (pDif do XML). Reduz o Vl ICMS automaticamente." style="color:var(--warn);white-space:nowrap">% Dif.ICMS</th>
     <th class="th-green">Tipo</th>
     <th class="th-green r" title="Informe a Qtd do Pedido -> Fator calculado automaticamente">Qtd Pedido</th>
     <th class="th-green r">Fator</th>
@@ -2475,6 +2476,7 @@ function renderEditorTable() {
       <td class="r">${formatBR(r['Vl Unit'])}</td>
       <td class="r">${formatBR(r['% ICMS'])}</td>
       <td class="r">${formatBR(r['% IPI'])}</td>
+      <td class="r" style="color:var(--warn);font-weight:600">${(r['% Dif. ICMS'] != null && r['% Dif. ICMS'] > 0) ? formatBR(r['% Dif. ICMS']) + '%' : '-'}</td>
       <td><select class="ie inp-tipo">
         <option value="Ativo/Consumo"${tipo==='Ativo/Consumo'?' selected':''}>Ativo/Consumo</option>
         <option value="PA/Insumo"${tipo==='PA/Insumo'?' selected':''}>PA/Insumo</option>
@@ -2563,7 +2565,10 @@ function renderCompleteTable() {
     { key:'% FCP-ST',      alt:[], label:'% FCP-ST',    type:'pct' },
     { key:'BC FCP-ST',     alt:[], label:'BC FCP-ST',   type:'mon' },
     { key:'Vl FCP-ST',     alt:[], label:'Vl FCP-ST',   type:'mon' },
-    { key:'% Red BC',      alt:[], label:'% Red BC',    type:'pct' },
+    { key:'% Red BC',      alt:[], label:'% Red BC',       type:'pct' },
+    { key:'% Dif. ICMS',  alt:[], label:'% Dif. ICMS',    type:'pct' },
+    { key:'Vl ICMS Op',   alt:[], label:'Vl ICMS Op',     type:'mon' },
+    { key:'Vl ICMS Dif',  alt:[], label:'Vl ICMS Dif',    type:'mon' },
     { key:'Preço Líq PC',    alt:['Preço Líq PC','Preco Liq PC'],    label:'Preço Líq PC',    type:'mon' },
     { key:'Preço Líq Total', alt:['Preço Líq Total','Preco Liq Total'], label:'Preço Líq Total', type:'mon' },
     { key:'vNF', alt:['vNFTot', 'Vl Total Nota', 'Vl Total NF', 'Vl Nota'], label:'VL TOTAL NOTA', type:'mon' }
@@ -4098,6 +4103,7 @@ function updateResumoAjustado() {
     const pICMS  = normPct(r['% ICMS']);
     const pIPI   = normPct(r['% IPI']);
     const pRedBC = normPct(r['% Red BC']);
+    const pDif   = normPct(r['% Dif. ICMS']);   // diferimento parcial ICMS (ex: 38,46%)
     const pICMS_ef = pICMS * (1 - pRedBC);
 
     // ---------- calcular totais por linha ----------
@@ -4115,6 +4121,8 @@ function updateResumoAjustado() {
       vIPI      = 0;
       vICMS     = BC * pICMS_ef;
     }
+    // Aplica diferimento parcial (pDif): reduz o ICMS pelo % diferido
+    if (pDif > 0) vICMS = vICMS * (1 - pDif);
 
     sumTotalProd += totalProd;
     sumBcIcms    += BC;

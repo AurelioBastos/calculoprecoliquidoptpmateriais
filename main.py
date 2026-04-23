@@ -141,6 +141,7 @@ def parse_nfe(file_bytes: bytes, filename: str) -> list[dict]:
         pICMS = bcICMS = vICMS = 0.0
         vBCST = pICMSST = vICMSST = 0.0
         vBCFCPST = pFCPST = vFCPST = pRedBC = 0.0
+        pDif = vICMSOp = vICMSDif = 0.0
         bcIPI = pIPI = vIPI = 0.0
 
         if imp:
@@ -160,6 +161,9 @@ def parse_nfe(file_bytes: bytes, filename: str) -> list[dict]:
                     pFCPST   = to_float(find_text(child, 'pFCPST'))   or pFCPST
                     vFCPST   = to_float(find_text(child, 'vFCPST'))   or vFCPST
                     pRedBC   = to_float(find_text(child, 'pRedBC'))   or pRedBC
+                    pDif     = to_float(find_text(child, 'pDif'))     or pDif
+                    vICMSOp  = to_float(find_text(child, 'vICMSOp'))  or vICMSOp
+                    vICMSDif = to_float(find_text(child, 'vICMSDif')) or vICMSDif
 
             csticms = (orig + cst) if (orig and cst) else 'Simples'
             if not orig: orig = 'Simples'
@@ -187,7 +191,7 @@ def parse_nfe(file_bytes: bytes, filename: str) -> list[dict]:
             '% IPI': pIPI, 'BC IPI': bcIPI, 'Vl IPI': vIPI,
             '% ICMS-ST': pICMSST, 'BC ICMS-ST': vBCST, 'Vl ICMS-ST': vICMSST,
             '% FCP-ST': pFCPST, 'BC FCP-ST': vBCFCPST, 'Vl FCP-ST': vFCPST,
-            '% Red BC': pRedBC, 'Inf Adicionais': infCpl,
+            '% Red BC': pRedBC, '% Dif. ICMS': pDif, 'Vl ICMS Op': vICMSOp, 'Vl ICMS Dif': vICMSDif, 'Inf Adicionais': infCpl,
             # campos editáveis (defaults)
             'Fator Conv.': 1.0, 'Multiplicador': 1.0,
             '% PIS+COFINS': None, 'Taxa Câmbio': None, 'Tipo Material': None,
