@@ -4104,7 +4104,8 @@ function updateResumoAjustado() {
     const pIPI   = normPct(r['% IPI']);
     const pRedBC = normPct(r['% Red BC']);
     const pDif   = normPct(r['% Dif. ICMS']);   // diferimento parcial ICMS (ex: 38,46%)
-    const pICMS_ef = pICMS * (1 - pRedBC);
+    // pDif reduz a BC do ICMS (como pRedBC). Carga efetiva = pICMS × (1-pRedBC) × (1-pDif)
+    const pICMS_ef = pICMS * (1 - pRedBC) * (1 - pDif);
 
     // ---------- calcular totais por linha ----------
     let totalProd, BC, vICMS, vIPI;
@@ -4121,8 +4122,6 @@ function updateResumoAjustado() {
       vIPI      = 0;
       vICMS     = BC * pICMS_ef;
     }
-    // Aplica diferimento parcial (pDif): reduz o ICMS pelo % diferido
-    if (pDif > 0) vICMS = vICMS * (1 - pDif);
 
     sumTotalProd += totalProd;
     sumBcIcms    += BC;
