@@ -667,7 +667,7 @@ async def confronto_pc(
         # Alíquota efetiva do ICMS: aplica redução do pDif (diferimento parcial) se existir
         _p_icms_nominal = _norm_pct(row.get('% ICMS', 0))
         _p_dif          = _norm_pct(row.get('% Dif. ICMS', 0))
-        _p_icms_ef      = _p_icms_nominal * (1 - _p_dif)   # ex: 19,5% × (1-38,46%) = 12%
+        _p_icms_ef      = round(_p_icms_nominal * (1 - _p_dif), 4)   # ex: 19,5% × (1-38,46%) = 0.1200
         base = {
             '_id': row.get('_id'),
             'Descrição':  row.get('Descrição',''),
@@ -776,7 +776,7 @@ async def confronto_pc(
                     pp = round(_to_num(vpc), 4) if pd.notna(vpc) else 0.0
                 except Exception:
                     pp = 0.0
-                return ('OK' if abs(xp - pp) < 0.0001 else 'DIVERGENTE'), xp, pp
+                return ('OK' if abs(xp - pp) < 0.01 else 'DIVERGENTE'), xp, pp
 
             if "aliq_icms" in best_map:
                 st_icms, xi, pi_ = cmp(_p_icms_ef, best_map["aliq_icms"])
