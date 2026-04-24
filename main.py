@@ -2,7 +2,7 @@
 NF-e Preço Líquido — Backend FastAPI
 Serve o frontend estático + processa XMLs em memória (sem persistência).
 """
-import os, re, json, asyncio
+import os, re, json, asyncio, secrets, hashlib
 import unicodedata
 from io import BytesIO
 from typing import Any, List
@@ -10,9 +10,9 @@ from typing import Any, List
 import pandas as pd
 import xml.etree.ElementTree as ET
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -24,6 +24,72 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ──────────────────────────────────────────────────────────────────────────────
+# AUTENTICAÇÃO SIMPLES — credenciais via variáveis de ambiente
+# ──────────────────────────────────────────────────────────────────────────────
+# AUTENTICAÇÃO — múltiplos usuários via variável de ambiente
+#
+# No Render, defina a variável NFE_USERS com o formato:
+#   usuario1:senha1,usuario2:senha2,usuario3:senha3
+#
+# Exemplo:
+#   NFE_USERS=joao:Senh@123,maria:Pass456,pedro:Abc789
+#
+# Se NFE_USERS não estiver definida, usa o usuário padrão abaixo.
+# ──────────────────────────────────────────────────────────────────────────────
+def _load_users() -> dict:
+    raw = os.environ.get("NFE_USERS", "admin:nfe2024")
+    users = {}
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if ":" in entry:
+            u, p = entry.split(":", 1)
+            users[u.strip()] = p.strip()
+    return users
+
+_USERS: dict = _load_users()
+
+# Sessões válidas em memória {token: username}
+_SESSIONS: dict = {}
+
+def _check_token(request: Request) -> bool:
+    token = request.cookies.get("nfe_token") or request.headers.get("x-nfe-token", "")
+    return token in _SESSIONS
+
+class LoginBody(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/login")
+async def login(body: LoginBody):
+    senha_correta = _USERS.get(body.username.strip())
+    if senha_correta and body.password == senha_correta:
+        token = secrets.token_hex(32)
+        _SESSIONS[token] = body.username
+        resp = JSONResponse({"ok": True, "user": body.username})
+        resp.set_cookie("nfe_token", token, httponly=True, samesite="lax", max_age=28800)
+        return resp
+    raise HTTPException(status_code=401, detail="Usuário ou senha incorretos.")
+
+@app.post("/api/logout")
+async def logout(request: Request):
+    token = request.cookies.get("nfe_token", "")
+    _SESSIONS.pop(token, None)
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("nfe_token")
+    return resp
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    # Rotas públicas: login e a própria página HTML
+    if path in ("/", "/api/login", "/api/logout") or not path.startswith("/api/"):
+        return await call_next(request)
+    # Demais rotas /api/* exigem token válido
+    if not _check_token(request):
+        return JSONResponse(status_code=401, content={"detail": "Não autenticado."})
+    return await call_next(request)
 
 HTML_FILE = os.path.join(os.path.dirname(__file__), "nfe_app.html")
 

@@ -4249,5 +4249,122 @@ function _setResumoKpi(id, val) {
   });
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TELA DE LOGIN
+════════════════════════════════════════════════════════════════ -->
+<style>
+#login-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f2744 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+#login-overlay.hidden { display: none; }
+.login-box {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 48px 40px 40px;
+  width: 360px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+  text-align: center;
+}
+.login-logo {
+  width: 56px; height: 56px; border-radius: 14px;
+  background: linear-gradient(135deg,#2563eb,#1d4ed8);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 800; color: #fff;
+  margin: 0 auto 20px;
+}
+.login-title { font-size: 20px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
+.login-sub   { font-size: 13px; color: #94a3b8; margin-bottom: 32px; }
+.login-field { margin-bottom: 16px; text-align: left; }
+.login-field label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 6px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+.login-field input {
+  width: 100%; box-sizing: border-box;
+  background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+  color: #f1f5f9; font-size: 14px; padding: 10px 14px; outline: none;
+  transition: border-color .2s;
+}
+.login-field input:focus { border-color: #2563eb; }
+.login-btn {
+  width: 100%; padding: 12px; border-radius: 8px; border: none; cursor: pointer;
+  background: linear-gradient(135deg,#2563eb,#1d4ed8);
+  color: #fff; font-size: 15px; font-weight: 700;
+  margin-top: 8px; transition: opacity .2s;
+}
+.login-btn:hover { opacity: .88; }
+.login-btn:disabled { opacity: .5; cursor: default; }
+.login-error { color: #f87171; font-size: 13px; margin-top: 14px; min-height: 18px; }
+</style>
+
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">NF</div>
+    <div class="login-title">NF-e Preço Líquido</div>
+    <div class="login-sub">Faça login para continuar</div>
+    <div class="login-field">
+      <label>Usuário</label>
+      <input type="text" id="login-user" placeholder="Digite seu usuário" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <label>Senha</label>
+      <input type="password" id="login-pass" placeholder="Digite sua senha" autocomplete="current-password">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Entrar</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Verifica se já está autenticado ao carregar
+  async function checkAuth() {
+    try {
+      const r = await fetch('/api/recalc', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({data:[], pis_rate:0}) });
+      if (r.status === 401) showLogin();
+      else hideLogin();
+    } catch(e) { hideLogin(); }
+  }
+
+  function showLogin() { document.getElementById('login-overlay').classList.remove('hidden'); }
+  function hideLogin() { document.getElementById('login-overlay').classList.add('hidden'); }
+
+  window.doLogin = async function() {
+    const btn   = document.getElementById('login-btn');
+    const user  = document.getElementById('login-user').value.trim();
+    const pass  = document.getElementById('login-pass').value;
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = '';
+    if (!user || !pass) { errEl.textContent = 'Preencha usuário e senha.'; return; }
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    try {
+      const r = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user, password: pass })
+      });
+      if (r.ok) {
+        hideLogin();
+      } else {
+        const d = await r.json();
+        errEl.textContent = d.detail || 'Usuário ou senha incorretos.';
+      }
+    } catch(e) {
+      errEl.textContent = 'Erro de conexão. Tente novamente.';
+    }
+    btn.disabled = false; btn.textContent = 'Entrar';
+  };
+
+  // Permite login com Enter
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !document.getElementById('login-overlay').classList.contains('hidden')) {
+      doLogin();
+    }
+  });
+
+  checkAuth();
+})();
+</script>
 </body>
 </html>
