@@ -1071,8 +1071,10 @@ async def export_confronto(payload: ExportConfrontoPayload):
     ORDERED = [
         ("Descrição",                 "Descricao"),
         ("Ped-Item",                         "Ped-Item"),
+        ("Qtd",                              "Qtd XML"),
         ("Preço Líq Total (XML)",     "R$ XML"),
         ("Vl Líq Unit PC",                "R$ PC"),
+        ("VL Liq MIRO",                      "VL Liq MIRO"),
         ("Dif. Vl Unit",                     "Dif R$"),
         ("Lim. Tolerância",               "Lim. Tol."),
         ("Status Dif.",                      "St. Dif"),
@@ -1110,7 +1112,8 @@ async def export_confronto(payload: ExportConfrontoPayload):
     # Monta set de labels para _STATUS_COLS/_MONEY_COLS/_PCT_COLS lookup
     key_to_label = dict(pairs)
     lbl_status = {"St. Dif","St. ICMS","St. IPI","St. ST","St. NCM","St. Orig"}
-    lbl_money  = {"R$ XML","R$ PC","Dif R$","Lim. Tol."}
+    lbl_money  = {"R$ XML","R$ PC","Dif R$","Lim. Tol.","VL Liq MIRO"}
+    lbl_qty    = {"Qtd XML"}
     lbl_pct    = {"ICMS XML%","ICMS PC%","IPI XML%","IPI PC%","ST XML%","ST PC%"}
 
     def _write_confronto_row(ws, excel_row, row_data, is_header=False, bg=None):
@@ -1133,6 +1136,13 @@ async def export_confronto(payload: ExportConfrontoPayload):
                     if raw_val is not None:
                         try: val = float(raw_val)
                         except: pass
+                # Qtd cols
+                elif lbl in lbl_qty:
+                    fg, bold = _C_HDR_FG, False
+                    align = "right"
+                    if raw_val is not None:
+                        try: val = float(raw_val)
+                        except: pass
                 # Pct cols
                 elif lbl in lbl_pct:
                     fg, bold = _C_HDR_FG, False
@@ -1140,7 +1150,8 @@ async def export_confronto(payload: ExportConfrontoPayload):
                 else:
                     fg, bold = _C_HDR_FG, False
                     align = "left"
-            num_fmt = "#,##0.00" if lbl in lbl_money and isinstance(val, float) else None
+            num_fmt = "#,##0.00" if lbl in lbl_money and isinstance(val, float) else \
+                      "#,##0.###" if lbl in lbl_qty and isinstance(val, float) else None
             c = ws.cell(row=excel_row, column=ci, value=val)
             _style(c, bg or _C_HDR_BG, fg, bold=bold, align=align, num_fmt=num_fmt)
         ws.row_dimensions[excel_row].height = 20 if is_header else 16
