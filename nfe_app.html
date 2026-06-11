@@ -1347,6 +1347,7 @@ html.light .sefaz-badge.erro{background:rgba(100,100,100,.08);color:var(--txt-3)
 
             <button id="btn-executar-confronto" class="btn btn-primary btn-sm" style="width:auto" disabled>Confrontar</button>
             <button id="btn-export-confronto" class="btn btn-success btn-sm" style="width:auto;display:none">Exportar Excel</button>
+            <button id="btn-ordenar-peditem" class="btn btn-secondary btn-sm" style="width:auto;display:none" title="Ordenar por Pedido e Item numericamente">⇅ Ordenar Ped-Item</button>
             <button id="btn-open-div-modal" class="btn btn-secondary btn-sm" style="width:auto;display:none">Gerar Resumo Div.</button>
           </div>
 
@@ -1746,6 +1747,7 @@ const DOM = {
   btnLimparPc:    $('btn-limpar-pc'),
   btnExecutarConfronto:$('btn-executar-confronto'),
   btnExportConfronto:  $('btn-export-confronto'),
+  btnOrdenarPedItem:   $('btn-ordenar-peditem'),
   wrapPedItem:    $('table-wrap-peditem'),
   wrapConfrontoRes:$('table-wrap-confronto-res'),
   kpiConfronto:   $('kpi-confronto'),
@@ -2228,6 +2230,7 @@ DOM.btnLimparTudo.addEventListener('click', () => {
   // Reset Confronto
   DOM.btnExecutarConfronto.disabled = true;
   DOM.btnExportConfronto.style.display = 'none';
+  DOM.btnOrdenarPedItem.style.display = 'none';
   document.getElementById('btn-open-div-modal').style.display = 'none';
   DOM.kpiMatches.textContent = '0';
   DOM.kpiSemMatch.textContent = '0';
@@ -2464,10 +2467,11 @@ function renderEditorTable() {
     
     const descricao = r['Descrição'] ?? r['Descri\u00e7\u00e3o'] ?? r['Descricao'] ?? '';
     const precoLiq = r['Preço Líq Total'] ?? r['Pre\u00e7o L\u00edq Total'] ?? r['Preco Liq Total'] ?? 0;
-    // VL Liq MIRO = Preço Líq Unitário (sem Mult.) × Qtd Pedido
-    // 'Preço Líq PC' é o unitário sem multiplicador; caso ausente divide pelo Mult.
-    const precoLiqUnit = r['Preço Líq PC'] ?? r['Preço Líq PC'] ?? r['Preco Liq PC'] ?? (precoLiq / (parseFloat(r['Multiplicador']) || 1));
-    const vlLiqMiro = precoLiqUnit * qtdPed;
+    // VL Liq MIRO = Preço Líq Total (unitário×Mult.) × Qtd NF-e
+    // Fórmula correta: evita arredondamento intermediário de dividir/multiplicar pelo Mult.
+    const vlLiqMiro = parseFloat(precoLiq) * qtdNfe;
+    // Persiste no AppState para uso no Confronto PC
+    r['VL Liq MIRO'] = vlLiqMiro;
     h += `<tr data-id="${r._id}">
       <td class="muted" style="font-weight:bold">${nf}</td>
       <td class="muted" style="font-weight:bold">${codProd}</td>
@@ -2505,19 +2509,19 @@ function renderEditorTable() {
       if(!qtdPed || qtdPed <= 0) return;
       const novoFator = Math.round((qtdPed / qtdNfe) * 100000) / 100000;
       tr.querySelector('.inp-fator').value = novoFator;
-      // Recalcula VL Liq MIRO com a nova Qtd Pedido
+      // Recalcula VL Liq MIRO com a nova Qtd NF-e base (não muda com Qtd Pedido)
       const precoLiq = parseFloat(
         ref?.['Pre\u00e7o L\u00edq Total'] ?? ref?.['Preco Liq Total'] ?? 0
       );
-      // VL Liq MIRO unitário (sem Mult.) × nova Qtd Pedido
-      const precoLiqUnitMiro = ref?.['Preço Líq PC'] ?? ref?.['Preco Liq PC'] ?? (precoLiq / (parseFloat(ref?.['Multiplicador']) || 1));
-      const novoVlLiqMiro = precoLiqUnitMiro * qtdPed;
+      // VL Liq MIRO = Preço Líq Total × Qtd NF-e (qtdNfe não muda, só fator/qtdPed mudam)
+      const novoVlLiqMiro = precoLiq * qtdNfe;
       const tdMiro = tr.querySelector('td.td-vl-liq-miro');
       if(tdMiro) tdMiro.textContent = 'R$ ' + formatBR(novoVlLiqMiro);
       // Atualiza AppState imediatamente — _cfAlertas lê daqui via _id
       if(ref) {
         ref['Qtd Pedido'] = qtdPed;
         ref['Fator Conv.'] = novoFator;
+        ref['VL Liq MIRO'] = novoVlLiqMiro;
       }
       // Re-renderiza Confronto PC se já tiver dados → alerta Q some em tempo real
       if(AppState.confrontoData.length) renderConfrontoTable();
@@ -2815,6 +2819,10 @@ DOM.btnExecutarConfronto.addEventListener('click', async () => {
       if(orig) {
         r['NÂº NF']      = orig['NÂº NF']      || orig['NF'] || orig['nNF'] || '';
         r['Chave NF-e'] = orig['Chave NF-e'] || orig['Chave'] || orig['chNFe'] || '';
+        // Leva o VL Liq MIRO calculado na Edição de Fatores para o Confronto
+        r['VL Liq MIRO'] = orig['VL Liq MIRO'] ?? null;
+        // Qtd da NF-e
+        r['Qtd'] = orig['Qtd'] ?? null;
       }
       return r;
     });
@@ -2845,6 +2853,7 @@ DOM.btnExecutarConfronto.addEventListener('click', async () => {
     document.getElementById('btn-open-div-modal').style.display = 'inline-flex';
     renderConfrontoTable();
     DOM.btnExportConfronto.style.display='inline-flex';
+    DOM.btnOrdenarPedItem.style.display='inline-flex';
   } catch(e){ alert('Falha no confronto: '+e.message); }
   finally{ hideLoading(); }
 });
@@ -3122,6 +3131,16 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
   // ─────────────────────────────────────────────────────────────────────────────
 
   function renderConfrontoTable() {
+  // Sincroniza VL Liq MIRO: atualiza confrontoData com o valor atual do AppState.data
+  // (pode ter mudado via Qtd Pedido, Mult. ou recalc na Edição de Fatores)
+  const _edMap = {};
+  AppState.data.forEach(r => { if(r._id) _edMap[r._id] = r; });
+  AppState.confrontoData.forEach(r => {
+    const ed = r._id ? _edMap[r._id] : null;
+    if(ed && ed['VL Liq MIRO'] != null) r['VL Liq MIRO'] = ed['VL Liq MIRO'];
+    if(ed && ed['Qtd'] != null) r['Qtd'] = ed['Qtd'];
+  });
+
   let data = AppState.confrontoData;
   if(AppState.currentFilter==='div') data = data.filter(r => {
     const stdStatuses = [r['Status Dif.'],r['Status ICMS'],r['Status IPI'],r['Status ICMS-ST'],r['Status NCM'],r['Status Origem']].some(s => String(s||'').includes('DIVERGENTE'));
@@ -3155,7 +3174,7 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
 
   let h = `<table class="dt"><thead><tr>
     <th>NF</th><th>Descricao</th><th>Ped-Item</th>
-    <th class="r">R$ XML</th><th class="r">R$ PC</th><th class="r">Dif R$</th><th>Dif</th>
+    <th class="r">Qtd XML</th><th class="r">R$ XML</th><th class="r">R$ PC</th><th class="r" style="color:var(--warn);white-space:nowrap">VL Liq MIRO</th><th class="r">Dif R$</th><th>Dif</th>
     <th class="r">ICMS XML%</th><th class="r">ICMS PC%</th><th>Status</th>
     <th class="r">IPI XML%</th><th class="r">IPI PC%</th><th>Status</th>
     <th class="r">ST XML%</th><th class="r">ST PC%</th><th>Status</th>
@@ -3199,8 +3218,10 @@ DOM.wrapConfrontoRes.addEventListener('input', (e) => {
       <td>${nfNum}</td>
       <td style="white-space:nowrap">${descCell}</td>
       <td><input class="ie inp-conf-ped-item" type="text" style="width:140px" data-idx="${AppState.confrontoData.indexOf(r)}" data-row-id="${r._id||''}" value="${r['Ped-Item']||''}" placeholder="PEDIDO-ITEM"></td>
+      <td class="r">${r['Qtd']!=null?formatBR(r['Qtd']):'-'}</td>
       <td class="r money">R$ ${formatBR(vlPcXML)}</td>
       <td class="r">${vlLiqUnitPC!=null?'R$ '+formatBR(vlLiqUnitPC):'-'}</td>
+      <td class="r" style="color:var(--warn);font-weight:700;font-family:var(--mono)">${r['VL Liq MIRO']!=null?'R$ '+formatBR(r['VL Liq MIRO']):'-'}</td>
       <td class="r ${difColor}">${dif!=null?formatBR(dif):'-'}</td>
       <td>${badge(r['Status Dif.'])}</td>
       <td class="r">${r['ICMS XML (%)']!=null?r['ICMS XML (%)']+'%':'-'}</td>
@@ -3280,6 +3301,28 @@ DOM.btnExportConfronto.addEventListener('click', async () => {
     alert('Erro ao exportar: ' + e.message); 
   }
   finally{ DOM.btnExportConfronto.textContent='Exportar Excel'; }
+});
+
+// ── Ordenar Confronto por Ped-Item (pedido numérico → item numérico) ──────────
+DOM.btnOrdenarPedItem.addEventListener('click', () => {
+  if(!AppState.confrontoData.length) return;
+
+  function parsePedItem(str) {
+    const s = String(str || '').trim();
+    const m = s.match(/^(\d+)-(\d+)$/);
+    if(m) return { ped: parseInt(m[1], 10), item: parseInt(m[2], 10) };
+    // sem match ou formato diferente: vai para o final
+    return { ped: Infinity, item: Infinity };
+  }
+
+  AppState.confrontoData.sort((a, b) => {
+    const pa = parsePedItem(a['Ped-Item']);
+    const pb = parsePedItem(b['Ped-Item']);
+    if(pa.ped !== pb.ped) return pa.ped - pb.ped;
+    return pa.item - pb.item;
+  });
+
+  renderConfrontoTable();
 });
 
 /* Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬Ã¢ââ¬
