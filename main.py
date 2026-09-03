@@ -259,7 +259,10 @@ def parse_nfe(file_bytes: bytes, filename: str) -> list[dict]:
             '% FCP-ST': pFCPST, 'BC FCP-ST': vBCFCPST, 'Vl FCP-ST': vFCPST,
             '% Red BC': pRedBC, '% Dif. ICMS': pDif, 'Vl ICMS Op': vICMSOp, 'Vl ICMS Dif': vICMSDif, 'Inf Adicionais': infCpl,
             # campos editáveis (defaults)
-            'Fator Conv.': 1.0, 'Multiplicador': 1.0,
+            # 'Multiplicador' fica None por padrão (assim como PIS/Taxa/Tipo)
+            # para que o Multiplicador Global do parâmetro possa ser aplicado
+            # automaticamente quando o usuário não sobrescrever linha a linha.
+            'Fator Conv.': 1.0, 'Multiplicador': None,
             '% PIS+COFINS': None, 'Taxa Câmbio': None, 'Tipo Material': None,
             # campos calculados (preenchidos pelo recalc)
             'Vl Unit BRL': 0.0, 'Vl Unit Pedido': 0.0, 'Qtd Pedido': 0.0,
@@ -275,9 +278,10 @@ def parse_nfe(file_bytes: bytes, filename: str) -> list[dict]:
 # ──────────────────────────────────────────────────────────────────────────────
 # CÁLCULO PREÇO LÍQUIDO
 # ──────────────────────────────────────────────────────────────────────────────
-def calcular_linha(row: dict, pis_rate_global: float, taxa_global: float, tipo_global: str) -> dict:
+def calcular_linha(row: dict, pis_rate_global: float, taxa_global: float, tipo_global: str, mult_global: float = 1.0) -> dict:
     fator = float(row.get('Fator Conv.') or 1.0) or 1.0
-    mult  = float(row.get('Multiplicador') or 1.0) or 1.0
+    # Multiplicador individual (por linha) sobrepõe o Multiplicador Global se preenchido
+    mult  = float(row.get('Multiplicador') or mult_global or 1.0) or 1.0
     tipo  = row.get('Tipo Material') or tipo_global
     q_nfe = float(row.get('Qtd') or 1.0) or 1.0
 
@@ -355,12 +359,13 @@ class RecalcPayload(BaseModel):
     pis_rate: float = 0.0
     taxa_efetiva: float = 1.0
     tipo_global: str = "Ativo/Consumo"
+    mult_global: float = 1.0
 
 @app.post("/api/recalc")
 async def recalc(payload: RecalcPayload):
     pis_rate = payload.pis_rate / 100.0
     for row in payload.data:
-        calc = calcular_linha(row, pis_rate, payload.taxa_efetiva, payload.tipo_global)
+        calc = calcular_linha(row, pis_rate, payload.taxa_efetiva, payload.tipo_global, payload.mult_global)
         row.update(calc)
     return {"data": payload.data}
 
@@ -444,8 +449,9 @@ async def procv_apply(
 
 @app.post("/api/confronto-pc")
 async def confronto_pc(
-    pc_file: List[UploadFile] = File(...),
-    data:    str              = Form(...),
+    pc_file:     List[UploadFile] = File(...),
+    data:        str              = Form(...),
+    mult_global: float            = Form(1.0),
 ):
     # Lê todos os arquivos em paralelo (asyncio.gather)
     all_contents = await asyncio.gather(*[f.read() for f in pc_file])
@@ -786,7 +792,8 @@ async def confronto_pc(
 
             taxa_row = row.get('Taxa Câmbio') or row.get('Taxa Cambio') or row.get('Taxa CÂ¢mbio') or 1
             taxa     = float(taxa_row) if taxa_row else 1.0
-            mult     = float(row.get('Multiplicador') or 1) or 1.0
+            # Multiplicador individual (por linha) sobrepõe o Multiplicador Global se preenchido
+            mult     = float(row.get('Multiplicador') or mult_global or 1) or 1.0
             fator    = float(row.get('Fator Conv.')   or 1) or 1.0
             qtd_nfe  = float(row.get('Qtd') or 1) or 1.0
             vunit    = float(row.get('Vl Unit') or 0)
